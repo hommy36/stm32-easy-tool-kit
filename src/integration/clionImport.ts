@@ -10,7 +10,7 @@ import { BuildCancelled } from '../build/service';
 import { buildToolEnvironment } from '../build/environment';
 import { loadPresetMetadata, PresetMetadata, ResolvedSelection } from '../build/presets';
 import { WorkflowController } from '../workflow/controller';
-import { defaultProjectSettings } from '../project/types';
+import { defaultProjectSettings, DebugProbe, probeLabel } from '../project/types';
 import { ClionProfile, ClionRun, cachedToolPaths, expandClion, profileSelection, readClionInstallations, readClionProject, readConfig, selectClionToolchain } from './clionConfig';
 
 export function matchClionPreset(profile: ClionProfile, source: string, environment: NodeJS.ProcessEnv, metadata: PresetMetadata): string[] {
@@ -21,17 +21,21 @@ export function matchClionPreset(profile: ClionProfile, source: string, environm
   });
   return candidates.map(choice => choice.name);
 }
-export function boardSettings(text: string): { speedKHz?: number; backend?: 'auto' | 'hid' | 'usb_bulk'; serial?: string } {
+export function boardSettings(text: string): { speedKHz?: number; backend?: 'auto' | 'hid' | 'usb_bulk'; serial?: string; probe?: DebugProbe } {
   const lines = text.split(/\r?\n/).map(line => line.replace(/#.*$/, '').trim());
-  if (lines.some(line => /interface\/(?!cmsis-dap\.cfg)[\w-]+\.cfg|adapter\s+driver\s+(?!cmsis-dap\b)\S+|transport\s+select\s+(?!swd\b)\S+/.test(line))) {
-    throw new Error(t('该 OpenOCD 配置使用其他探针或通信方式；当前只支持 CMSIS-DAP / SWD'));
+  if (lines.some(line => /interface\/(?!cmsis-dap\.cfg|stlink\.cfg|stlink-dap\.cfg|jlink\.cfg)[\w./-]+\.cfg|adapter\s+driver\s+(?!cmsis-dap\b|st-link\b|jlink\b)\S+|transport\s+select\s+(?!swd\b|hla_swd\b)\S+/.test(line))) {
+    throw new Error(t('该 OpenOCD 配置使用不支持的探针或通信方式；当前支持 DAPLink、ST-Link、J-Link 的 SWD'));
   }
   const last = (pattern: RegExp) => lines.map(line => { const match = pattern.exec(line); return match?.[1] ?? match?.[2]; }).filter((value): value is string => !!value).at(-1);
   const speed = last(/^(?:adapter\s+speed|adapter_khz)\s+(\d+)\s*$/);
   const backend = last(/^(?:cmsis-dap\s+backend|cmsis_dap_backend)\s+(auto|hid|usb_bulk)\s*$/) as 'auto' | 'hid' | 'usb_bulk' | undefined;
-  const serial = last(/^adapter\s+serial\s+(?:"([^"$\[\]]+)"|([^\s$\[\]]+))\s*$/) ?? undefined;
+  const serial = last(/^(?:adapter\s+serial|hla_serial)\s+(?:"([^"$\[\]]+)"|([^\s$\[\]]+))\s*$/) ?? undefined;
+  const probe: DebugProbe = lines.some(line => /adapter\s+driver\s+jlink\b/.test(line))
+    ? 'jlink' : lines.some(line => /adapter\s+driver\s+st-link\b/.test(line))
+      ? 'st-link' : lines.some(line => /interface\/(?:stlink|stlink-dap)\.cfg\b/.test(line))
+        ? 'st-link' : lines.some(line => /interface\/jlink\.cfg\b/.test(line)) ? 'jlink' : 'cmsis-dap';
   if (speed && (+speed < 1 || +speed > 10000)) throw new Error(t('配置脚本中的 SWD 速度超出 1–10000 kHz'));
-  return { speedKHz: speed ? +speed : undefined, backend, serial };
+  return { speedKHz: speed ? +speed : undefined, backend, serial, probe };
 }
 async function signature(files: string[]): Promise<string> {
   const digest = createHash('sha256');
@@ -136,14 +140,14 @@ export async function importClion(controller: WorkflowController, tools: ToolSta
     t('CMake 参数：{0}', selection.configureArgs?.slice(4).map(arg => JSON.stringify(arg)).join(' ') || `--preset ${selection.configurePreset}`),
     ...candidates.map(tool => `${toolNames[tool.id]}: ${tool.directory}`),
     ...(run ? [t('OpenOCD 配置：{0}', script), t('固件目标：{0}', run.target ?? t('配置后识别 / 选择固件目标')),
-      t('通信方式：{0}；SWD：{1} kHz；序列号：{2}', board.backend ?? defaults.backend, board.speedKHz ?? defaults.speedKHz, board.serial ?? '—'),
+      t('探针：{0}；SWD：{1} kHz；序列号：{2}', probeLabel(board.probe ?? defaults.probe ?? 'cmsis-dap'), board.speedKHz ?? defaults.speedKHz, board.serial ?? '—'),
       t('沿用原脚本的芯片和复位设置；仍先编译、完整烧录并校验，调试端口由插件分配。')] : [t('未找到 OpenOCD 运行配置，保留当前烧录设置。')]),
     t('工具选择对本机工程共享。确认后仅检查工具，不连接硬件；导入后需重新核对芯片。')
   ].join('\n');
   if (!await vscode.window.showInformationMessage(t('导入 CLion 配置'), { modal: true, detail: summary }, t('导入并检查工具'))) return;
   const settings = { ...project.settings, configurePreset: selection.configurePreset, buildPreset, targetId: undefined, configuration: undefined, preferredTarget: run?.target,
     ...(script ? { targetScript: script, scriptKind: 'board' as const, chipConfirmed: false, backend: board.backend ?? defaults.backend,
-      speedKHz: board.speedKHz ?? defaults.speedKHz, serial: board.serial } : {}) };
+      probe: board.probe ?? defaults.probe, speedKHz: board.speedKHz ?? defaults.speedKHz, serial: board.serial } : {}) };
   const checks = new Map<ToolId, CheckResult[]>();
   await controller.importSettings(settings, project.revision, tools, async signal => {
     guard();

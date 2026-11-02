@@ -2,16 +2,16 @@
 
 在 VS Code 侧栏完成 STM32 的 **工具准备 → 配置 → 编译 → 烧录 → 调试**，不用手写 `tasks.json` / `launch.json`。
 
-面向 Windows x64、已有 STM32 CMake 工程；首版优先支持 **DAPLink / CMSIS-DAP + SWD**，调试复用 Cortex-Debug。
+面向 Windows x64、已有 STM32 CMake 工程；支持 **DAPLink / CMSIS-DAP、ST-Link、J-Link** 的 SWD 烧录与调试，调试复用 Cortex-Debug。
 
-> **当前为 0.5.x 测试版，未发布 Marketplace。** 软件侧构建、取消、诊断和界面流程已验收；真实板卡烧录、断点、单步和变量检查尚未完成，详见 [验证记录](docs/verification.md)。
+> **当前为 0.6.x 测试版，未发布 Marketplace。** 软件侧构建、取消、诊断和界面流程已验收；DAPLink / ST-Link 做过实机准备检查，J-Link 仅完成参数与软件层验证，真实板卡烧录、断点、单步和变量检查尚未全部完成，详见 [验证记录](docs/verification.md)。
 
 ## 功能
 
 - **首次设置向导**：一次选好工程、编译工具、构建方案、固件目标、芯片与 OpenOCD 脚本。
 - **构建**：直接使用现有 CMake Presets；没有 Presets 时可自动生成本地构建方案，不写工程文件。
-- **烧录与调试**：DAPLink/SWD、OpenOCD、Cortex-Debug；首次确认后可记住授权。
-- **CLion 兼容**：导入 CLion 的 CMake Profile、工具链、构建目录和 OpenOCD board 配置。
+- **烧录与调试**：DAPLink、ST-Link、J-Link 的 SWD、OpenOCD、Cortex-Debug；首次确认后可记住授权。
+- **CLion 兼容**：导入 CLion 的 CMake Profile、工具链、构建目录和 OpenOCD board 配置（含探针类型）。
 - **工程配置共享**：默认写入 `.vscode/stm32-easy.json`，可随 Git 传播，不包含本机工具路径。
 - **编辑器补全**：自动同步 `compile_commands.json` 到 Microsoft C/C++ 和 clangd（包括 `--query-driver`）。
 - **中英双语**：跟随 VS Code 显示语言；工程名、路径和编译器输出保持原样。
@@ -25,7 +25,7 @@
   - CLion CMake Profile（`.idea`）；
   - 由插件自动生成“自动 Debug / 自动 Release”本地方案。
 - 编译：CMake、Ninja、Arm GNU Toolchain。
-- 烧录/调试：OpenOCD（含 `scripts`）、Cortex-Debug 1.12.1 或兼容 1.x、DAPLink 探针。
+- 烧录/调试：OpenOCD（含 `scripts`）、Cortex-Debug 1.12.1 或兼容 1.x，以及 DAPLink / ST-Link / J-Link 之一。
 
 不支持 Linux/macOS、Windows ARM64、WSL/SSH/容器、虚拟工作区或 Web 版 VS Code；不转换 Keil 工程。
 
@@ -64,10 +64,13 @@ npm run package
 
 ## 烧录与调试
 
+- 在 **工程设置 → 高级参数 → 调试探针** 选择 DAPLink / CMSIS-DAP、ST-Link 或 J-Link；探针类型会随工程保存，团队配置一致。
 - 未选择 OpenOCD 脚本时，插件会根据 `.ioc`、CMake、启动/链接文件推荐唯一匹配的 target 脚本；也可手动选择。
 - 首次硬件操作展示工程、芯片、脚本、固件和 SWD 参数摘要；选择 **确认并记住** 后，配置和脚本内容不变时不再重复询问。
 - 烧录 = 先编译，成功后烧录当前 ELF、校验并复位运行；编译失败不会烧录旧固件。
 - 调试 = 先编译，再通过插件拥有的 OpenOCD 本地服务器接入 Cortex-Debug；不先独立烧录一遍。
+- DAPLink 使用 `adapter driver cmsis-dap`，通信方式（auto / HID / USB Bulk）只对 DAPLink 生效；ST-Link 使用 `adapter driver st-link` 或旧版 `interface/stlink.cfg` + `hla_swd`，旧版序列号用 `hla_serial`；J-Link 使用 `adapter driver jlink`。
+- 换探针会改变硬件授权条件，首次使用需重新确认。
 - 当前 Windows GDB 调试要求源码目录和 ELF 为 **ASCII 路径**；中文路径仍可编译和独立烧录。
 - **安全**：连接电机、摩擦轮等执行器时先切断动力电源，仅给控制板供电。停止不能撤销已写入的 Flash；插件不自动重试危险操作。
 
@@ -106,7 +109,8 @@ CMake 配置完成或添加外部目录后，插件自动为整个工作区同�
 | 编译按钮不可用 | 查看侧栏“编译环境”，选择工程或配置工具 |
 | 未识别固件目标 | 保存并配置 CMake，确认工程定义了可执行目标 |
 | 编译报错 | “问题”面板定位源码；完整日志在输出 → STM32 构建 |
-| 烧录或调试不可用 | 检查 OpenOCD、芯片与 target、Cortex-Debug 及 ASCII 路径要求 |
+| 烧录或调试不可用 | 检查 OpenOCD、所选探针、芯片与 target、Cortex-Debug 及 ASCII 路径要求 |
+| 找不到探针 | 确认“调试探针”选择与实物一致；DAPLink 检查 HID/WinUSB，ST-Link 装 ST 驱动，J-Link 装 SEGGER 驱动 |
 | 补全不生效 | 确认 clangd 或 Microsoft C/C++ 已安装；查看构建日志中的编译数据库同步信息 |
 | 保存提示页面过期 | 保留需要的草稿，再放弃修改并加载最新配置 |
 | 提示“已有操作或调试正在进行” | 查看提示中的具体原因；结束调试、等待工具检查或点击停止。无构建/硬件锁时，停止也可清除“上次操作不确定”的内存占用 |
@@ -127,8 +131,9 @@ npm run package      # 生成 VSIX
 
 ## 验证状态与已知限制
 
-- 已完成：真实 STM32 CMake 工程配置与编译、ELF/HEX/BIN 产物、取消构建、停止/重试、错误定位、主题与窄宽布局、工程配置共享、无 Presets 自动方案。
-- 未完成：DAPLink 实机烧录、main 断点、单步、变量与调用栈。软件测试和本地假 TCP 调试服务不等于板卡验收。
+- 已完成：真实 STM32 CMake 工程配置与编译、ELF/HEX/BIN 产物、取消构建、停止/重试、错误定位、主题与窄宽布局、工程配置共享、无 Presets 自动方案、OpenOCD 对 DAPLink / ST-Link / J-Link 的参数生成与能力检查。
+- 未完成：DAPLink 与 ST-Link 实机烧录、main 断点、单步、变量与调用栈；J-Link 尚未实机验证。软件测试和本地假 TCP 调试服务不等于板卡验收。
+- 旧版 OpenOCD 的 ST-Link 使用 `hla_swd`；J-Link 在旧版 OpenOCD 下不支持按序列号选探针，请升级 OpenOCD。
 - 首版调试仅支持 ASCII 路径；高级工具链或非 Ninja 构建在依赖无法证明时只允许编译，不进入烧录/调试。
 - 插件不是任意构建脚本或外部 IDE 的安全沙箱；不要让 CMake Tools、CLion 或另一个窗口同时控制同一构建目录或探针。
 

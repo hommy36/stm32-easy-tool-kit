@@ -3,6 +3,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { runProcess } from '../core/process';
 import { CheckResult, ToolInstallation, errorText } from '../core/types';
+import { probeLabel } from '../project/types';
 
 export async function checkInstallation(tool: ToolInstallation, signal?: AbortSignal): Promise<CheckResult[]> {
   signal?.throwIfAborted();
@@ -27,13 +28,25 @@ export async function checkInstallation(tool: ToolInstallation, signal?: AbortSi
     checks.push({ code: 'target', status: result.exitCode === 0 && result.stdout.trim() === 'arm-none-eabi' ? 'ok' : 'error', summary: t("编译器目标必须为 arm-none-eabi"), evidence: [result.stdout.trim(), result.stderr] });
   }
   if (tool.id === 'openocd') {
-    const script = tool.scriptsDirectory ? path.join(tool.scriptsDirectory, 'interface/cmsis-dap.cfg') : '';
-    let found = false;
-    try { found = Boolean(script) && (await fs.stat(script)).isFile(); } catch (error) {
-      checks.push({ code: 'scripts.detail', status: 'error', summary: t("OpenOCD 脚本不可访问"), evidence: [errorText(error)] });
+    const scripts: [string, string][] = [['cmsis-dap', 'interface/cmsis-dap.cfg'], ['st-link', 'interface/stlink.cfg'], ['jlink', 'interface/jlink.cfg']];
+    let complete = true;
+    for (const [probe, relative] of scripts) {
+      const script = tool.scriptsDirectory ? path.join(tool.scriptsDirectory, relative) : '';
+      let found = false;
+      try { found = Boolean(script) && (await fs.stat(script)).isFile(); } catch (error) {
+        checks.push({ code: `scripts.${probe}`, status: 'error', summary: t("OpenOCD 脚本不可访问"), evidence: [errorText(error)] });
+      }
+      if (!found) complete = false;
+      checks.push({ code: `scripts.${probe}.found`, status: found ? 'ok' : 'warning',
+        summary: found ? t("找到 {0} 接口脚本", relative) : t("缺少 {0} 接口脚本", relative), evidence: [script] });
     }
-    checks.push({ code: 'scripts', status: found ? 'ok' : 'error', summary: found ? t("找到 CMSIS-DAP 接口脚本") : t("缺少 CMSIS-DAP 接口脚本"), evidence: [script] });
-    if (!checks.some(check => check.status === 'error')) {
+    if (complete) {
+      for (const probe of ['cmsis-dap', 'st-link', 'jlink'] as const) {
+        const result = await runProcess({ executable: tool.executables.openocd, args: ['-c', `adapter driver ${probe}`, '-c', 'shutdown'], timeoutMs: 10000, signal });
+        checks.push({ code: `adapter.${probe}`, status: result.exitCode === 0 ? 'ok' : 'error',
+          summary: t("{0} 驱动配置能力{1}", probeLabel(probe), result.exitCode === 0 ? t("可用") : t("不可用")),
+          evidence: [result.stdout, result.stderr] });
+      }
       for (const backend of ['hid', 'usb_bulk']) {
         const result = await runProcess({ executable: tool.executables.openocd,
           args: ['-c', 'adapter driver cmsis-dap', '-c', `cmsis_dap_backend ${backend}`, '-c', 'shutdown'], timeoutMs: 10000, signal });
@@ -42,7 +55,7 @@ export async function checkInstallation(tool: ToolInstallation, signal?: AbortSi
           evidence: [result.stdout, result.stderr] });
       }
     }
-    checks.push({ code: 'hardware', status: 'unverified', summary: t("DAP 探针与目标芯片通信未验证"), evidence: [t("软件配置检查不会打开探针、复位或烧录目标。")] });
+    checks.push({ code: 'hardware', status: 'unverified', summary: t("探针与目标芯片通信未验证"), evidence: [t("软件配置检查不会打开探针、复位或烧录目标。")] });
   }
   if (tool.source === 'external') checks.push({ code: 'compatibility', status: 'warning', summary: t("外部安装未纳入固定版本组合认证"), evidence: [t("可运行性已单独检查，硬件兼容性需按实际组合验证。")] });
   return checks;

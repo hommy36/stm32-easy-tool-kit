@@ -3,8 +3,18 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DapBackend } from '../core/types';
 
+export type DebugProbe = 'cmsis-dap' | 'st-link' | 'jlink';
+export const debugProbes: DebugProbe[] = ['cmsis-dap', 'st-link', 'jlink'];
+export function probeOf(settings: ProjectSettings): DebugProbe {
+  return settings.probe ?? 'cmsis-dap';
+}
+export function probeLabel(probe: DebugProbe | undefined): string {
+  const value = probe ?? 'cmsis-dap';
+  return value === 'st-link' ? 'ST-Link' : value === 'jlink' ? 'J-Link' : 'DAPLink / CMSIS-DAP';
+}
 export interface HardwareAuthorization {
   scriptKind?: 'target' | 'board';
+  probe?: DebugProbe;
   targetScript: string;
   targetSha256: string;
   targetId: string;
@@ -38,6 +48,7 @@ export interface ProjectSettings {
   stopAtMain: boolean;
   setupComplete?: boolean;
   artifactPath?: string;
+  probe?: DebugProbe;
 }
 
 export interface SavedProject { revision: number; settings: ProjectSettings; }
@@ -45,9 +56,9 @@ export interface SavedProject { revision: number; settings: ProjectSettings; }
 const optionalStrings = ['configurePreset', 'buildPreset', 'configuration', 'targetId', 'targetScript', 'chipLabel', 'serial', 'artifactPath', 'preferredTarget'] as const;
 const dapBackends = ['auto', 'hid', 'usb_bulk'];
 const keys = new Set(['schemaVersion', 'projectUri', 'sourceDirectory', 'chipConfirmed', 'backend', 'speedKHz', 'stopAtMain',
-  'setupComplete', 'scriptKind', 'shareInProject', ...optionalStrings]);
+  'setupComplete', 'scriptKind', 'shareInProject', 'probe', ...optionalStrings]);
 const authorizationKeys = new Set(['targetScript', 'targetSha256', 'targetId', 'configurePreset', 'buildPreset', 'configuration',
-  'chipLabel', 'backend', 'speedKHz', 'serial', 'stopAtMain', 'acceptedAt', 'scriptKind']);
+  'chipLabel', 'backend', 'speedKHz', 'serial', 'stopAtMain', 'acceptedAt', 'scriptKind', 'probe']);
 
 export function normalizeTrustedPath(value: string): string {
   if (!path.isAbsolute(value) || path.parse(value).root.length < 2 || /[\x00-\x1f]/.test(value) || value.length > 4096) throw new Error(t("信任路径无效"));
@@ -59,6 +70,7 @@ export function validateAuthorization(raw: unknown): HardwareAuthorization {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(t("硬件授权记录无效"));
   const value = raw as Record<string, unknown>;
   if (value.scriptKind !== undefined && !['target','board'].includes(String(value.scriptKind))) throw new Error(t('配置脚本类型无效'));
+  if (value.probe !== undefined && !debugProbes.includes(value.probe as DebugProbe)) throw new Error(t('调试探针类型无效'));
   if (Object.keys(value).some(key => !authorizationKeys.has(key))) throw new Error(t("硬件授权记录含未知字段"));
   const text = (key: string) => typeof value[key] === 'string' && (value[key] as string).length > 0
     && (value[key] as string).length <= 4096 && !/[\x00-\x1f]/.test(value[key] as string);
@@ -88,6 +100,7 @@ export function validateProjectSettings(raw: unknown): ProjectSettings {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(t("工程设置不是对象"));
   const value = raw as Record<string, unknown>;
   if (value.scriptKind !== undefined && !['target','board'].includes(String(value.scriptKind))) throw new Error(t('配置脚本类型无效'));
+  if (value.probe !== undefined && !debugProbes.includes(value.probe as DebugProbe)) throw new Error(t('调试探针类型无效'));
   if (Object.keys(value).some(key => !keys.has(key))) throw new Error(t("工程设置含未知字段"));
   if (value.schemaVersion !== 1 || typeof value.projectUri !== 'string' || typeof value.sourceDirectory !== 'string'
     || typeof value.chipConfirmed !== 'boolean' || typeof value.stopAtMain !== 'boolean'
@@ -112,7 +125,7 @@ export function validateProjectSettings(raw: unknown): ProjectSettings {
 
 export function defaultProjectSettings(projectUri: string, sourceDirectory: string): ProjectSettings {
   return validateProjectSettings({ schemaVersion: 1, projectUri, sourceDirectory, chipConfirmed: false,
-    backend: 'auto', speedKHz: 1000, stopAtMain: true, shareInProject: true });
+    backend: 'auto', speedKHz: 1000, stopAtMain: true, shareInProject: true, probe: 'cmsis-dap' });
 }
 
 export function validateTrustedPaths(raw: unknown): string[] {
@@ -136,7 +149,7 @@ export function authorizationFrom(settings: ProjectSettings, targetSha256: strin
     throw new Error(t("请先确认工程、构建配置、目标、芯片和目标脚本，再启用自动授权"));
   }
   return { targetScript: settings.targetScript, targetSha256, targetId: settings.targetId,
-    scriptKind: settings.scriptKind,
+    scriptKind: settings.scriptKind, probe: probeOf(settings),
     configurePreset: settings.configurePreset, buildPreset: settings.buildPreset, configuration: settings.configuration,
     chipLabel: settings.chipLabel, backend: settings.backend, speedKHz: settings.speedKHz, serial: settings.serial,
     stopAtMain: settings.stopAtMain, acceptedAt };
@@ -145,6 +158,7 @@ export function authorizationMatches(settings: ProjectSettings, accepted: Hardwa
   if (!accepted || !settings.chipConfirmed || !settings.targetScript) return false;
   return accepted.targetScript === settings.targetScript && accepted.targetSha256 === targetSha256
     && (accepted.scriptKind ?? 'target') === (settings.scriptKind ?? 'target')
+    && (accepted.probe ?? 'cmsis-dap') === probeOf(settings)
     && accepted.targetId === settings.targetId && accepted.configurePreset === settings.configurePreset
     && accepted.buildPreset === settings.buildPreset && accepted.configuration === settings.configuration
     && accepted.chipLabel === settings.chipLabel && accepted.backend === settings.backend

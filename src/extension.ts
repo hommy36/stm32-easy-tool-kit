@@ -16,7 +16,7 @@ import { assertEvidenceCurrent, isWithin } from './build/artifacts';
 import { configureVerificationCache, flushVerificationCache, verificationCache } from './build/verificationCache';
 import { BuildCancelled } from './build/service';
 import { DapRuntime, scriptFingerprint } from './dap/config';
-import { authorizationFrom, authorizationMatches, isTrustedPath, normalizeTrustedPath, HardwareAuthorization } from './project/types';
+import { authorizationFrom, authorizationMatches, isTrustedPath, normalizeTrustedPath, probeLabel, probeOf, HardwareAuthorization } from './project/types';
 import { TrustStore } from './project/trust';
 import { flashFirmware } from './dap/flash';
 import { startGdbServer } from './dap/server';
@@ -101,7 +101,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       try { authorized = (await trust.read(settings.projectUri)).authorization; }
       catch (error) { output.appendLine(t("读取自动授权失败: {0}", redact(String(error)))); }
       if (authorizationMatches(confirmed, authorized, sha)) { approvedScripts.set(settings.projectUri, { file: target, sha256: sha }); return true; }
-      const choice = await vscode.window.showWarningMessage(t('确认芯片与烧录配置'), { modal: true, detail: t('操作：{0}\n工程：{1}\n芯片：{2}\n配置脚本：{3}\n固件：{4}\nCMSIS-DAP / SWD · {5} kHz · {6}\n\n请确认芯片与脚本匹配。带电机等执行器的设备请先切断动力电源。确认并记住后，配置未变时不再询问。', action === 'flash' ? t('烧录、校验并复位运行') : t('烧录固件并复位调试'), settings.sourceDirectory, settings.chipLabel ?? t('手动确认的目标'), target, evidence.artifact, settings.speedKHz, settings.backend) }, t('确认并记住'), t('仅本次执行'));
+      const probe = probeOf(settings);
+      const transport = probe === 'cmsis-dap' ? `${probeLabel(probe)} / SWD · ${settings.backend} · ${settings.speedKHz} kHz` : `${probeLabel(probe)} / SWD · ${settings.speedKHz} kHz`;
+      const choice = await vscode.window.showWarningMessage(t('确认芯片与烧录配置'), { modal: true, detail: t('操作：{0}\n工程：{1}\n芯片：{2}\n配置脚本：{3}\n固件：{4}\n{5}\n\n请确认芯片与脚本匹配。带电机等执行器的设备请先切断动力电源。确认并记住后，配置未变时不再询问。', action === 'flash' ? t('烧录、校验并复位运行') : t('烧录固件并复位调试'), settings.sourceDirectory, settings.chipLabel ?? t('手动确认的目标'), target, evidence.artifact, transport) }, t('确认并记住'), t('仅本次执行'));
       if (!choice) return false;
       if (await scriptFingerprint(target) !== sha) throw new Error(t('芯片配置脚本在确认期间发生变化，请重新执行'));
       if (choice === t("确认并记住") && sha) {

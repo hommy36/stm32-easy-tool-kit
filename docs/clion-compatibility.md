@@ -19,8 +19,8 @@
 
 - 读取工程 workspace.xml、`.idea/runConfigurations/*.xml`、`.run/*.xml` 中的 OpenOCD 运行配置，以及 CLion 全局 OpenOCD 程序路径。
 - 沿用 `board-config` 的原文件路径和固件目标名称。配置后只在真实 CMake File API 目标中匹配名称，不使用旧 ELF 冒充当前固件。
-- 完整 board 脚本负责加载接口、芯片与脚本内的复位配置；插件不重复加载 CMSIS-DAP 接口。执行时检查实际接口为 CMSIS-DAP、传输为 SWD。
-- 识别脚本顶层直接声明的 `adapter speed` / `adapter_khz`、CMSIS-DAP backend、`adapter serial`。没有直接声明时使用插件默认通信参数并清除旧序列号；预览列出最终值，可在“高级”中调整。复杂 Tcl 表达式、嵌套脚本内的通信参数不做解释求值。
+- 完整 board 脚本负责加载接口、芯片与脚本内的复位配置；插件不重复加载接口。执行时按所选探针检查实际接口为 CMSIS-DAP、ST-Link（含 `hla`）或 J-Link，传输为 SWD 或 `hla_swd`。
+- 识别脚本顶层直接声明的 `adapter speed` / `adapter_khz`、探针类型（`interface/cmsis-dap.cfg`、`interface/stlink.cfg`、`interface/jlink.cfg` 或对应 `adapter driver`）、CMSIS-DAP backend、`adapter serial` / `hla_serial`。没有直接声明时使用插件默认通信参数并清除旧序列号；预览列出最终值，可在“高级”中调整。复杂 Tcl 表达式、嵌套脚本内的通信参数不做解释求值。
 - CLion 的固定 GDB / Telnet 端口、`download-type` 和运行配置中的 `reset-type` 不直接映射。烧录仍先编译，再完整写入、校验并复位；调试使用插件分配的端口。脚本自身的 `reset_config` 等设置继续生效。
 - 导入和工具检查不连接板卡。首次实际硬件操作仍需确认；脚本类型变化会使旧授权失效。未改变的旧 target 模式配置和授权保持兼容。
 

@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { t } from '../i18n';
 import { replaceFile } from '../core/atomicFile';
-import { ProjectSettings, defaultProjectSettings, validateProjectSettings } from './types';
+import { DebugProbe, ProjectSettings, defaultProjectSettings, validateProjectSettings } from './types';
 
 export const sharedFileName = 'stm32-easy.json';
 export interface SharedConfiguration {
@@ -18,6 +18,7 @@ export interface SharedConfiguration {
   targetScript?: { base: 'project' | 'openocd'; path: string };
   scriptKind?: 'target' | 'board';
   backend: 'auto' | 'hid' | 'usb_bulk';
+  probe?: DebugProbe;
   speedKHz: number;
   stopAtMain: boolean;
 }
@@ -60,7 +61,7 @@ export function parseShared(text: string, uri: string): ProjectSettings {
   const raw: unknown = JSON.parse(text);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(t('工程共享配置格式无效'));
   const config = raw as Record<string, unknown>;
-  const allowed = ['version','sourceDirectory','configurePreset','buildPreset','configuration','firmwareTarget','chipLabel','targetScript','scriptKind','backend','speedKHz','stopAtMain'];
+  const allowed = ['version','sourceDirectory','configurePreset','buildPreset','configuration','firmwareTarget','chipLabel','targetScript','scriptKind','backend','probe','speedKHz','stopAtMain'];
   if (config.version !== 1 || Object.keys(config).some(key => !allowed.includes(key))) throw new Error(t('工程共享配置含未知字段或版本不受支持'));
   const root = fileURLToPath(uri), source = path.resolve(root, relativePath(config.sourceDirectory));
   let targetScript: string | undefined;
@@ -75,7 +76,7 @@ export function parseShared(text: string, uri: string): ProjectSettings {
   return validateProjectSettings({ ...defaultProjectSettings(uri, source), shareInProject: true,
     configurePreset: config.configurePreset, buildPreset: config.buildPreset, configuration: config.configuration,
     preferredTarget: config.firmwareTarget, chipLabel: config.chipLabel, targetScript, scriptKind: config.scriptKind,
-    backend: config.backend, speedKHz: config.speedKHz, stopAtMain: config.stopAtMain });
+    backend: config.backend, probe: config.probe, speedKHz: config.speedKHz, stopAtMain: config.stopAtMain });
 }
 export async function portableConfiguration(settings: ProjectSettings, openocdScripts?: string): Promise<{ text: string; settings: ProjectSettings; created?: string }> {
   const root = await fs.realpath(fileURLToPath(settings.projectUri));
@@ -123,7 +124,7 @@ export async function portableConfiguration(settings: ProjectSettings, openocdSc
   const config: SharedConfiguration = { version: 1, sourceDirectory: path.relative(root, source).replace(/\\/g, '/') || '.',
     configurePreset: settings.configurePreset, buildPreset: settings.buildPreset, configuration: settings.configuration,
     firmwareTarget: settings.preferredTarget, chipLabel: settings.chipLabel, targetScript: script, scriptKind: settings.scriptKind,
-    backend: settings.backend, speedKHz: settings.speedKHz, stopAtMain: settings.stopAtMain };
+    backend: settings.backend, probe: settings.probe, speedKHz: settings.speedKHz, stopAtMain: settings.stopAtMain };
   const text = JSON.stringify(config, null, 2) + '\n';
   parseShared(text, settings.projectUri);
   return { text, settings: value, created };

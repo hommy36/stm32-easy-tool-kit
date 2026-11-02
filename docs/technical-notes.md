@@ -2,7 +2,7 @@
 
 ## 平台与工程
 
-支持 Windows x64、本地 VS Code 1.96 及以上版本、可信的本地文件工作区。工程需已有 CMakeLists.txt 和可解析输出目录的 Configure Preset。首轮硬件范围为 CMSIS-DAP（包括 DAPLink）与 SWD。
+支持 Windows x64、本地 VS Code 1.96 及以上版本、可信的本地文件工作区。工程需已有 CMakeLists.txt 和可解析输出目录的 Configure Preset。硬件范围为 DAPLink / CMSIS-DAP、ST-Link、J-Link 与 SWD；J-Link 仅完成软件层验证。
 
 不生成 HAL 工程，不转换 Keil 工程，不替代 CubeMX。Linux、macOS、Windows ARM64、WSL、SSH、容器和 Web 版 VS Code 尚不支持。
 

@@ -77,6 +77,23 @@ async function main(){
       assert.equal(await evaluate("document.getElementById('chipLabel').value"),'STM32H723VGT6');assert.equal(await evaluate("document.getElementById('targetScript').value"),'target/stm32h7x.cfg');
       await send({...base,replaceDraft:true});
     });
+    await check('probe selection persists and disables the DAPLink backend field',async()=>{
+      await send({...base,replaceDraft:true});await send({type:'navigate',options:{page:'advanced'}});
+      assert.equal(await evaluate("document.getElementById('probe').value"),'cmsis-dap');
+      assert.equal(await evaluate("document.getElementById('backend').disabled"),false);
+      await evaluate("document.getElementById('probe').value='st-link';document.getElementById('probe').dispatchEvent(new Event('change',{bubbles:true}))");
+      assert.equal(await evaluate("document.getElementById('backend').disabled"),true);
+      assert.match(await evaluate("document.getElementById('dapSummary').textContent"),/ST-Link/);
+      await evaluate("document.getElementById('save').click()");
+      const message=await evaluate('sent.at(-1)');assert.equal(message.settings.probe,'st-link');
+      await send({type:'operationComplete'});
+      await send({...base,replaceDraft:true,project:{...base.project,settings:{...base.project.settings,probe:'st-link'}}});
+      assert.equal(await evaluate("document.getElementById('probe').value"),'st-link');
+      assert.equal(await evaluate("document.getElementById('backend').disabled"),true);
+      await evaluate("document.getElementById('probe').value='cmsis-dap';document.getElementById('probe').dispatchEvent(new Event('change',{bubbles:true}))");
+      assert.equal(await evaluate("document.getElementById('backend').disabled"),false);
+      await send({...base,replaceDraft:true});
+    });
     await check('empty saved preset defaults to Debug once presets are available',async()=>{
       await send({...base,replaceDraft:true,project:{...base.project,settings:{...base.project.settings,configurePreset:undefined}}});
       assert.equal(await evaluate("document.getElementById('configurePreset').value"),'Debug');

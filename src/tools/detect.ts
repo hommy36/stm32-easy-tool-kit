@@ -49,7 +49,8 @@ export async function validateExistingTool(id: ToolId, selected: string, signal?
     for (const base of bases) {
       for (const suffix of ['share/openocd/scripts', 'openocd/scripts', 'scripts']) {
         const directory = path.join(base, suffix);
-        if (await exists(path.join(directory, 'interface/cmsis-dap.cfg'))) { scriptsDirectory = directory; break; }
+        if (await exists(path.join(directory, 'interface/cmsis-dap.cfg')) || await exists(path.join(directory, 'interface/stlink.cfg'))
+          || await exists(path.join(directory, 'interface/jlink.cfg'))) { scriptsDirectory = directory; break; }
       }
       if (scriptsDirectory) break;
     }

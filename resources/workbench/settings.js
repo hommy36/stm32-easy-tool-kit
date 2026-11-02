@@ -20,6 +20,7 @@
       field.disabled = !state?.project && !['projectChoice', 'openFolder'].includes(field.id);
     });
     // Project selection and opening a folder must also work with no selected project.
+    if ((draft?.probe ?? 'cmsis-dap') !== 'cmsis-dap') byId('backend').disabled = true;
     byId('projectChoice').disabled = busy || pending || dirty;
     byId('save').disabled = busy || pending || conflict || !state?.project;
     byId('configure').disabled = busy || pending || conflict || !state?.readiness.build.enabled;
@@ -65,11 +66,15 @@
     if (selected && !entries.some(item => item.value === selected)) add(selected, t("{0}（待重新识别）", selected));
     select.value = selected ?? '';
   }
+  const probeLabels = { 'cmsis-dap': 'DAPLink / CMSIS-DAP', 'st-link': 'ST-Link', jlink: 'J-Link' };
+  function probeName(value) { return probeLabels[value] ?? probeLabels['cmsis-dap']; }
   function renderDraft() {
     if (!draft) return;
     for (const key of ['sourceDirectory', 'chipLabel', 'targetScript', 'backend', 'speedKHz', 'serial']) byId(key).value = draft[key] ?? '';
     for (const key of ['stopAtMain']) byId(key).checked = !!draft[key];
     byId('shareInProject').checked = draft?.shareInProject !== false;
+    byId('probe').value = draft.probe ?? 'cmsis-dap';
+    byId('backend').disabled = (draft.probe ?? 'cmsis-dap') !== 'cmsis-dap';
     byId('scriptKind').value = draft.scriptKind ?? 'target';
     byId('scriptLabel').textContent = draft.scriptKind === 'board' ? t('完整 OpenOCD 配置脚本（CLion board）') : t('芯片配置脚本（OpenOCD target）');
     if (!draft.configurePreset && state.configurations.length) {
@@ -83,7 +88,7 @@
       draft.targetId ? JSON.stringify([draft.targetId, draft.configuration]) : '', t("配置后识别 / 选择固件目标"));
     byId('binaryDirectory').textContent = configuration?.binaryDirectory ?? t("读取方案后显示");
     byId('targetSummary').textContent = targets.length ? t("已识别 {0} 个可执行目标", targets.length) : t("保存并配置后显示固件目标");
-    byId('dapSummary').textContent = `CMSIS-DAP / SWD · ${draft.backend} · ${draft.speedKHz} kHz${draft.serial ? ` · ${draft.serial}` : ''}`;
+    byId('dapSummary').textContent = `${probeName(draft.probe)} / SWD · ${byId('backend').disabled ? '' : `${draft.backend} · `}${draft.speedKHz} kHz${draft.serial ? ` · ${draft.serial}` : ''}`;
   }
   function renderTools() {
     const list = byId('toolList'); list.replaceChildren();
@@ -150,6 +155,7 @@
     if (!draft) return;
     for (const key of ['sourceDirectory', 'chipLabel', 'targetScript', 'serial', 'configurePreset', 'buildPreset']) draft[key] = byId(key).value.trim() || undefined;
     draft.backend = byId('backend').value;
+    draft.probe = byId('probe').value;
     draft.scriptKind = byId('scriptKind').value === 'board' ? 'board' : undefined;
     draft.speedKHz = Number(byId('speedKHz').value);
     draft.stopAtMain = byId('stopAtMain').checked;
@@ -190,6 +196,7 @@
   byId('importClion').onclick = () => { if (!dirty) post('importClion'); };
   byId('detectTargetScript').onclick = () => { collect(); post('detectTargetScript', { settings: draft }); };
   byId('scriptKind').onchange = () => { collect(); renderDraft(); changed(); };
+  byId('probe').onchange = () => { collect(); renderDraft(); changed(); };
   for (const id of ['cancel', 'loadChoices', 'pickTargetScript', 'revokeAuthorization', 'deleteSettings']) byId(id).onclick = () => post(id);
   for (const id of ['openLog', 'openCortex', 'openFolder', 'stop']) byId(id).onclick = () => api.postMessage({ type: id });
   byId('continueDap').onclick = () => { options = { ...options, setup: false }; navigate('dap'); };

@@ -8,7 +8,7 @@ import { RunRequest, RunResult } from '../core/types';
 import { runProcess } from '../core/process';
 import { BuildCancelled } from '../build/service';
 import { BuildEvidence, isWithin } from '../build/artifacts';
-import { ProjectSettings, validateProjectSettings } from '../project/types';
+import { ProjectSettings, probeOf, validateProjectSettings } from '../project/types';
 
 export type DapDialect = 'modern' | 'legacy';
 export interface DapRuntime {
@@ -39,24 +39,51 @@ function targetPath(settings: ProjectSettings, scriptsDirectory: string): string
   if (!path.isAbsolute(script) && !isWithin(scriptsDirectory, file)) throw new Error(t("相对目标脚本不能越过 OpenOCD scripts"));
   return file;
 }
+function driverCommands(settings: ProjectSettings, dialect: DapDialect): string[] {
+  const probe = probeOf(settings);
+  if (dialect === 'modern') {
+    if (probe === 'st-link') return ['adapter driver st-link'];
+    if (probe === 'jlink') return ['adapter driver jlink'];
+    return ['adapter driver cmsis-dap', `cmsis-dap backend ${settings.backend}`];
+  }
+  if (probe === 'st-link') return ['source [find interface/stlink.cfg]'];
+  if (probe === 'jlink') return ['source [find interface/jlink.cfg]'];
+  return ['adapter driver cmsis-dap', `cmsis_dap_backend ${settings.backend}`];
+}
+function serialCommands(settings: ProjectSettings, dialect: DapDialect): string[] {
+  if (!settings.serial) return [];
+  const probe = probeOf(settings);
+  if (probe === 'st-link' && dialect === 'legacy') return [`hla_serial ${tclWord(settings.serial)}`];
+  if (probe === 'jlink' && dialect === 'legacy') throw new Error(t('旧版 OpenOCD 不支持 J-Link 序列号选择，请升级 OpenOCD'));
+  return [`adapter serial ${tclWord(settings.serial)}`];
+}
+function transportCommand(settings: ProjectSettings, dialect: DapDialect): string {
+  return probeOf(settings) === 'st-link' && dialect === 'legacy' ? 'transport select hla_swd' : 'transport select swd';
+}
+function adapterGuard(settings: ProjectSettings): string {
+  const probe = probeOf(settings);
+  if (probe === 'st-link') return 'if {[adapter name] ne "st-link" && [adapter name] ne "hla"} {error "STM32 Easy Tool Kit requires ST-Link"}';
+  if (probe === 'jlink') return 'if {[adapter name] ne "jlink"} {error "STM32 Easy Tool Kit requires J-Link"}';
+  return 'if {[adapter name] ne "cmsis-dap"} {error "STM32 Easy Tool Kit requires CMSIS-DAP"}';
+}
 export function buildConfigArgs(raw: ProjectSettings, scriptsDirectory: string, dialect: DapDialect = 'legacy'): string[] {
   const settings = validateProjectSettings(raw);
   if (!path.isAbsolute(scriptsDirectory)) throw new Error(t("OpenOCD scripts 必须为绝对路径"));
   const target = targetPath(settings, scriptsDirectory);
+  const probe = probeOf(settings);
   if (settings.scriptKind === 'board') {
     // A CLion board file owns interface/target/reset configuration. Do not load the interface twice.
-    const args = ['-s', scriptsDirectory, '-c', `source ${tclWord(target)}`,
-      '-c', 'if {[adapter name] ne "cmsis-dap"} {error "STM32 Easy Tool Kit requires CMSIS-DAP"}',
-      '-c', 'if {[transport select] ne "swd"} {error "STM32 Easy Tool Kit requires SWD"}',
-      '-c', `${dialect === 'modern' ? 'cmsis-dap backend' : 'cmsis_dap_backend'} ${settings.backend}`];
-    if (settings.serial) args.push('-c', `adapter serial ${tclWord(settings.serial)}`);
+    const args = ['-s', scriptsDirectory, '-c', `source ${tclWord(target)}`, '-c', adapterGuard(settings),
+      '-c', 'if {[transport select] ne "swd" && [transport select] ne "hla_swd"} {error "STM32 Easy Tool Kit requires SWD"}'];
+    if (probe === 'cmsis-dap') args.push('-c', `${dialect === 'modern' ? 'cmsis-dap backend' : 'cmsis_dap_backend'} ${settings.backend}`);
+    for (const command of serialCommands(settings, dialect)) args.push('-c', command);
     args.push('-c', `adapter speed ${settings.speedKHz}`);
     return args;
   }
-  const args = ['-s', scriptsDirectory, '-c', 'adapter driver cmsis-dap', '-c',
-    `${dialect === 'modern' ? 'cmsis-dap backend' : 'cmsis_dap_backend'} ${settings.backend}`];
-  if (settings.serial) args.push('-c', `adapter serial ${tclWord(settings.serial)}`);
-  args.push('-c', 'transport select swd', '-c', `source ${tclWord(target)}`, '-c', `adapter speed ${settings.speedKHz}`);
+  const args = ['-s', scriptsDirectory];
+  for (const command of driverCommands(settings, dialect)) args.push('-c', command);
+  for (const command of serialCommands(settings, dialect)) args.push('-c', command);
+  args.push('-c', transportCommand(settings, dialect), '-c', `source ${tclWord(target)}`, '-c', `adapter speed ${settings.speedKHz}`);
   return args;
 }
 export function buildFlashArgs(settings: ProjectSettings, scriptsDirectory: string, artifact: string, dialect: DapDialect = 'legacy'): string[] {
@@ -90,14 +117,20 @@ export async function resolveDapConfiguration(raw: ProjectSettings, signal: Abor
   for (const candidate of ['modern', 'legacy'] as const) {
     runtime.guard();
     if (signal.aborted) throw new BuildCancelled();
-    const result = await probe({ executable, args: ['-c', 'adapter driver cmsis-dap', '-c',
-      `${candidate === 'modern' ? 'cmsis-dap backend' : 'cmsis_dap_backend'} ${settings.backend}`, '-c',
-      portCommand(candidate, 'gdb', 3333), '-c', portCommand(candidate, 'tcl', 'disabled'), '-c',
-      portCommand(candidate, 'telnet', 'disabled'), '-c', 'shutdown'], timeoutMs: 10000, signal });
+    const commands = [
+      ...driverCommands(settings, candidate),
+      ...serialCommands(settings, candidate),
+      transportCommand(settings, candidate),
+      portCommand(candidate, 'gdb', 3333),
+      portCommand(candidate, 'tcl', 'disabled'),
+      portCommand(candidate, 'telnet', 'disabled'),
+    ];
+    const result = await probe({ executable, args: ['-s', scriptsDirectory, ...commands.flatMap(command => ['-c', command]), '-c', 'shutdown'],
+      timeoutMs: 10000, signal });
     if (result.cancelled || signal.aborted) throw new BuildCancelled();
     if (result.exitCode === 0 && !result.timedOut) { dialect = candidate; break; }
   }
-  if (!dialect) throw new Error(t("当前 OpenOCD 不支持所需 CMSIS-DAP/SWD 参数，请检查版本和后端能力"));
+  if (!dialect) throw new Error(t("当前 OpenOCD 不支持所选探针或 SWD 参数，请检查版本和后端能力"));
   runtime.guard();
   if (signal.aborted) throw new BuildCancelled();
   return { executable, scriptsDirectory, targetScript, targetSha256, dialect };

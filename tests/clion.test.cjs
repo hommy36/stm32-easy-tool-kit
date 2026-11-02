@@ -60,9 +60,11 @@ test('preset-backed CLion profile resolves by actual output directory, never spl
 });
 test('board import preserves original script, speed and serial; does not load CMSIS-DAP twice', () => {
   const content='source [find interface/cmsis-dap.cfg]\nsource [find target/stm32f4x.cfg]\nreset_config none\nadapter speed 4000\nadapter serial "probe-1"\ncmsis_dap_backend hid';
-  assert.deepEqual(boardSettings(content),{speedKHz:4000,backend:'hid',serial:'probe-1'});
+  assert.deepEqual(boardSettings(content),{speedKHz:4000,backend:'hid',serial:'probe-1',probe:'cmsis-dap'});
   assert.equal(boardSettings('adapter serial probe-2').serial,'probe-2');
-  assert.throws(()=>boardSettings('source [find interface/stlink.cfg]'));assert.throws(()=>boardSettings('transport select jtag'));
+  assert.equal(boardSettings('source [find interface/stlink.cfg]\ntransport select hla_swd\nhla_serial "st-1"').probe,'st-link');
+  assert.equal(boardSettings('adapter driver jlink\nadapter serial "jl-1"').probe,'jlink');
+  assert.throws(()=>boardSettings('source [find interface/ftdi/x.cfg]'));assert.throws(()=>boardSettings('transport select jtag'));
   const settings={...defaultProjectSettings('file:///D:/project','D:/project'),targetScript:'D:/project/board.cfg',chipConfirmed:true,scriptKind:'board'};
   const args=buildConfigArgs(settings,'D:/OpenOCD/scripts');
   assert.ok(args.includes(`source ${tclWord(path.resolve('D:/project/board.cfg'))}`));assert.equal(args.includes('adapter driver cmsis-dap'),false);

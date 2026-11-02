@@ -1,5 +1,14 @@
 # 更新记录
 
+## 0.6.0 — 2026-11-02
+
+- 新增 **ST-Link** 与 **J-Link** 支持：在“工程设置 → 高级参数 → 调试探针”选择 DAPLink / CMSIS-DAP、ST-Link 或 J-Link；DAPLink 的 HID / USB Bulk 通信方式只对 DAPLink 生效。
+- OpenOCD 参数按探针生成：ST-Link 使用 `adapter driver st-link`（旧版 `interface/stlink.cfg` + `hla_swd` + `hla_serial`），J-Link 使用 `adapter driver jlink`；拨错探针时在接触硬件前明确报错。
+- 探针类型进入硬件授权与工程共享配置：换探针需要重新确认；旧配置缺省仍按 DAPLink 兼容。
+- CLion 导入支持 ST-Link / J-Link board 脚本并识别 `hla_serial`；OpenOCD 工具检查会分别验证三种探针接口脚本和驱动参数。
+- 设置页探针选择与 SWD 摘要同步；DAPLink 指南补充 ST-Link / J-Link 命令与驱动说明。
+- 新增探针参数、授权、共享配置和 Webview 交互回归测试。
+
 ## 0.5.17 — 2026-11-02
 
 - 读取构建方案不再占用“设置编辑”锁：自动读取期间可以切换工程，不再报“设置正在保存或读取”；并发读取同一工程共享一次请求。

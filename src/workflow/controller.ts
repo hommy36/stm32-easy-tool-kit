@@ -10,7 +10,7 @@ import { BuildModel } from '../build/fileApi';
 import { PresetMetadata } from '../build/presets';
 import { inputInventory } from '../build/inventory';
 import { BuildEvidence, InputScope, assertEvidenceCurrent, collectInputFiles, fingerprintInputs, fingerprintTools, inspectArmElf, isWithin } from '../build/artifacts';
-import { ProjectSettings, SavedProject, defaultProjectSettings, projectKeyUri, validateProjectSettings } from '../project/types';
+import { ProjectSettings, SavedProject, defaultProjectSettings, probeOf, projectKeyUri, validateProjectSettings } from '../project/types';
 import { ProjectStore } from '../project/store';
 import { isCmakeProject, readChipSuggestion } from '../project/discover';
 import { detectChipTargets } from '../project/targetDetection';
@@ -407,7 +407,7 @@ export class WorkflowController {
       gate();
       if (action === 'build') { this.publish('idle', afterDependencies.hardwareIssue ? t("编译成功；{0}", afterDependencies.hardwareIssue) : t("编译成功"), { evidence }); return; }
       if (!saved.settings.targetScript) throw new Error(t('请先自动识别或选择芯片配置脚本'));
-      leases.push(await acquireOperationLock(this.lockDirectory, 'hardware:cmsis-dap'));
+      leases.push(await acquireOperationLock(this.lockDirectory, `hardware:${probeOf(saved.settings)}`));
       this.publish('confirming', t("等待确认固件、目标与复位操作"), { evidence });
       if (!await this.host.confirmHardware(action, saved.settings, evidence)) throw new BuildCancelled();
       gate();
