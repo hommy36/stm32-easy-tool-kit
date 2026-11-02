@@ -10,7 +10,7 @@ import { BuildModel } from '../build/fileApi';
 import { PresetMetadata } from '../build/presets';
 import { inputInventory } from '../build/inventory';
 import { BuildEvidence, InputScope, assertEvidenceCurrent, collectInputFiles, fingerprintInputs, fingerprintTools, inspectArmElf, isWithin } from '../build/artifacts';
-import { ProjectSettings, SavedProject, defaultProjectSettings, probeOf, projectKeyUri, validateProjectSettings } from '../project/types';
+import { DebugProbe, ProjectSettings, SavedProject, debugProbes, defaultProjectSettings, probeLabel, probeOf, projectKeyUri, validateProjectSettings } from '../project/types';
 import { ProjectStore } from '../project/store';
 import { isCmakeProject, readChipSuggestion } from '../project/discover';
 import { detectChipTargets } from '../project/targetDetection';
@@ -236,6 +236,23 @@ export class WorkflowController {
     const name = await this.host.chooseBuild(metadata.compatibleBuilds(current.settings.configurePreset));
     if (name === undefined) return;
     await this.saveSettings({ ...current.settings, buildPreset: name || undefined, targetId: undefined, configuration: undefined }, current.revision);
+  }
+  async selectProbe(value: string): Promise<void> {
+    if (!debugProbes.includes(value as DebugProbe)) throw new Error(t('请选择有效的调试探针'));
+    const probe = value as DebugProbe;
+    this.assertEditable();
+    this.editing = true;
+    try {
+      this.host.guard();
+      const current = await this.activeProject();
+      if (!current) throw new Error(t('请先选择工程'));
+      if (probeOf(current.settings) === probe) return;
+      await this.store.save({ ...current.settings, probe }, current.revision);
+      this.publish('idle', t('调试探针已切换为 {0}', probeLabel(probe)), { projectUri: current.settings.projectUri });
+    } finally {
+      this.editing = false;
+      this.publish(this.snapshot.phase, this.snapshot.message);
+    }
   }
   async selectTarget(selectedId?: string, configuration?: string): Promise<void> {
     this.assertEditable();

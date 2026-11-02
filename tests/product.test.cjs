@@ -39,6 +39,7 @@ test('error recovery routes to useful destinations', () => {
 test('console messages reject injected commands and stale-shape context', () => {
   const msg={type:'action',action:'preset',projectUri:'file:///D:/demo',revision:1,snapshotRevision:2,value:'Debug'};
   assert.equal(validateConsoleMessage(msg).value,'Debug');
+  assert.equal(validateConsoleMessage({...msg,action:'probe',value:'st-link'}).action,'probe');
   for(const patch of [{action:'workbench.action.terminal.sendSequence'},{revision:-1},{command:'shell'},{value:''}]) assert.throws(()=>validateConsoleMessage({...msg,...patch}));
 });
 test('settings protocol validates save-and-configure and per-tool actions', () => {
@@ -53,6 +54,16 @@ test('hardware authorization remains compatible and invalidates for all relevant
   assert.ok(authorizationMatches(baseSettings,record,sha));
   for(const patch of [{configurePreset:'Release'},{buildPreset:'Other'},{configuration:'Release'},{targetId:'fw2'},{chipLabel:'STM32F401'},{targetScript:'target/other.cfg'},{backend:'hid'},{speedKHz:4000},{serial:'B'},{stopAtMain:false},{chipConfirmed:false}]) assert.equal(authorizationMatches({...baseSettings,...patch},record,sha),false);
   assert.equal(authorizationMatches(baseSettings,record,'b'.repeat(64)),false);
+});
+
+test('debug probe switches immediately for the active project and rejects unknown values', async()=>{
+  const f=await fixture();
+  assert.equal((await f.controller.view()).project.settings.probe,'cmsis-dap');
+  await f.controller.selectProbe('st-link');
+  assert.equal((await f.store.read(f.uri)).settings.probe,'st-link');
+  assert.equal(f.controller.getSnapshot().phase,'idle');
+  await assert.rejects(f.controller.selectProbe('ftdi'),/请选择有效的调试探针/);
+  assert.equal((await f.store.read(f.uri)).settings.probe,'st-link');
 });
 
 async function fixture() {

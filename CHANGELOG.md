@@ -1,8 +1,15 @@
 # 更新记录
 
+## 0.6.1 — 2026-11-02
+
+- 侧栏“当前工程”新增 **调试探针** 下拉：可直接在 DAPLink / CMSIS-DAP、ST-Link、J-Link 之间随时切换，立即保存并刷新，不需要进入设置页。
+- 修复侧栏始终显示 “CMSIS-DAP” 的问题：路径详情、烧录能力行和 SWD 摘要都显示当前实际探针。
+- 设置页的探针选择从“高级”移到“烧录与调试”主区域，首次配置时也能看到。
+- 切换探针后首次烧录/调试仍需重新确认硬件授权。
+
 ## 0.6.0 — 2026-11-02
 
-- 新增 **ST-Link** 与 **J-Link** 支持：在“工程设置 → 高级参数 → 调试探针”选择 DAPLink / CMSIS-DAP、ST-Link 或 J-Link；DAPLink 的 HID / USB Bulk 通信方式只对 DAPLink 生效。
+- 新增 **ST-Link** 与 **J-Link** 支持：在工程设置的“烧录与调试”或侧栏选择 DAPLink / CMSIS-DAP、ST-Link 或 J-Link；DAPLink 的 HID / USB Bulk 通信方式只对 DAPLink 生效。
 - OpenOCD 参数按探针生成：ST-Link 使用 `adapter driver st-link`（旧版 `interface/stlink.cfg` + `hla_swd` + `hla_serial`），J-Link 使用 `adapter driver jlink`；拨错探针时在接触硬件前明确报错。
 - 探针类型进入硬件授权与工程共享配置：换探针需要重新确认；旧配置缺省仍按 DAPLink 兼容。
 - CLion 导入支持 ST-Link / J-Link board 脚本并识别 `hla_serial`；OpenOCD 工具检查会分别验证三种探针接口脚本和驱动参数。

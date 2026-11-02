@@ -806,5 +806,7 @@
   "缺少 {0} 接口脚本": "Interface script {0} is missing",
   "{0} 驱动配置能力{1}": "{0} driver configuration support: {1}",
   "探针与目标芯片通信未验证": "Probe-to-target communication is not verified",
-  "操作：{0}\n工程：{1}\n芯片：{2}\n配置脚本：{3}\n固件：{4}\n{5}\n\n请确认芯片与脚本匹配。带电机等执行器的设备请先切断动力电源。确认并记住后，配置未变时不再询问。": "Action: {0}\nProject: {1}\nChip: {2}\nConfiguration script: {3}\nFirmware: {4}\n{5}\n\nCheck that the chip and script match. Disconnect actuator power on equipment with motors or similar devices. Remembering this confirmation skips the dialog while the configuration stays unchanged."
+  "操作：{0}\n工程：{1}\n芯片：{2}\n配置脚本：{3}\n固件：{4}\n{5}\n\n请确认芯片与脚本匹配。带电机等执行器的设备请先切断动力电源。确认并记住后，配置未变时不再询问。": "Action: {0}\nProject: {1}\nChip: {2}\nConfiguration script: {3}\nFirmware: {4}\n{5}\n\nCheck that the chip and script match. Disconnect actuator power on equipment with motors or similar devices. Remembering this confirmation skips the dialog while the configuration stays unchanged.",
+  "请选择有效的调试探针": "Select a valid debug probe",
+  "调试探针已切换为 {0}": "Debug probe switched to {0}"
 }

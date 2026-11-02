@@ -6,6 +6,8 @@
   let state;
   let pending = false;
   const actions = ['build', 'flash', 'debug'];
+  const probeOptions = [['cmsis-dap', 'DAPLink / CMSIS-DAP'], ['st-link', 'ST-Link'], ['jlink', 'J-Link']];
+  const probeName = value => probeOptions.find(([probe]) => probe === value)?.[1] ?? probeOptions[0][1];
   function post(action, extra = {}) {
     if (pending && action !== 'stop') return;
     el('error').hidden = true;
@@ -16,9 +18,10 @@
   }
   function enabled() {
     if (!state) return;
-    for (const id of ['project', 'preset', 'target']) el(id).disabled = pending || state.busy;
+    for (const id of ['project', 'preset', 'target', 'probe']) el(id).disabled = pending || state.busy;
     el('preset').disabled ||= !state.project || !state.configurations.length;
     el('target').disabled ||= !state.project || !state.targets.length;
+    el('probe').disabled ||= !state.project;
     for (const action of actions) {
       el(action).disabled = pending || !state.capabilities[action].enabled;
       el(action).title = state.capabilities[action].reason;
@@ -55,7 +58,13 @@
       settings?.targetId ? String(message.targets.findIndex(item => item.id === settings.targetId && item.configuration === settings.configuration)) : '', t("配置后识别；编译时可选择"));
     el('source').textContent = settings?.sourceDirectory ?? '';
     el('buildPreset').textContent = t("构建预设：{0}", settings?.buildPreset ?? t("不使用 Build Preset"));
-    el('probe').textContent = `CMSIS-DAP / SWD · ${settings?.speedKHz ?? 1000} kHz · ${settings?.chipLabel ?? t("未设置芯片")}`;
+    const probe = el('probe');
+    probe.replaceChildren();
+    for (const [value, label] of probeOptions) {
+      const option = document.createElement('option'); option.value = value; option.textContent = label; probe.append(option);
+    }
+    probe.value = settings?.probe ?? 'cmsis-dap';
+    el('probeDetail').textContent = `${probeName(probe.value)} / SWD · ${settings?.speedKHz ?? 1000} kHz · ${settings?.chipLabel ?? t("未设置芯片")}`;
     const needsSetup = settings && (!message.cmakeProject || !message.readiness.build.enabled || !settings.configurePreset);
     el('onboarding').hidden = !needsSetup;
     el('nextTitle').textContent = t("下一步");
@@ -75,7 +84,7 @@
       const row = document.createElement('div'); row.className = 'readiness';
       const heading = document.createElement('strong'); heading.textContent = label;
       const status = document.createElement('span'); status.className = cap.enabled ? 'badge' : 'hint'; status.textContent = cap.enabled ? t("已配置") : t("待处理");
-      const reason = document.createElement('p'); reason.className = 'hint'; reason.textContent = cap.enabled ? (action === 'build' ? 'Arm GNU · CMake · Ninja' : action === 'flash' ? 'CMSIS-DAP / SWD' : 'Cortex-Debug') : cap.reason;
+      const reason = document.createElement('p'); reason.className = 'hint'; reason.textContent = cap.enabled ? (action === 'build' ? 'Arm GNU · CMake · Ninja' : action === 'flash' ? `${probeName(settings?.probe)} / SWD` : 'Cortex-Debug') : cap.reason;
       row.append(heading, status, reason);
       if (!cap.enabled && cap.repair) {
         const button = document.createElement('button'); button.className = 'link'; button.textContent = ({ tools: t("管理工具"), setup: t("配置工程"), dap: t("设置芯片"), cortex: t("安装 / 更新扩展"), log: t("查看说明") })[cap.repair] ?? t("查看设置");
@@ -92,6 +101,7 @@
     const target = state?.targets[Number(el('target').value)];
     if (el('target').value !== '' && target) post('target', { value: target.id, configuration: target.configuration });
   };
+  el('probe').onchange = () => post('probe', { value: el('probe').value });
   window.addEventListener('message', ({ data }) => {
     if (data.type === 'state') render(data);
     else if (data.type === 'complete') { pending = false; enabled(); }

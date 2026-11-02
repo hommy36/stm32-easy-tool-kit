@@ -113,6 +113,17 @@ async function main(){
       await evaluate("document.getElementById('speedKHz').value='';document.getElementById('speedKHz').dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('save').click()");
       assert.equal(await evaluate('document.activeElement.id'),'speedKHz');
     });
+    await check('sidebar switches the debug probe at any time',async()=>{
+      await open('console');await send(base);
+      assert.equal(await evaluate("document.getElementById('probe').value"),'cmsis-dap');
+      await evaluate("document.getElementById('probe').value='st-link';document.getElementById('probe').dispatchEvent(new Event('change'))");
+      const message=await evaluate('sent.at(-1)');assert.equal(message.action,'probe');assert.equal(message.value,'st-link');
+      await send({type:'complete'});
+      await send({...base,project:{...base.project,settings:{...base.project.settings,probe:'st-link'}}});
+      assert.equal(await evaluate("document.getElementById('probe').value"),'st-link');
+      assert.match(await evaluate("document.getElementById('probeDetail').textContent"),/ST-Link/);
+      await send(base);
+    });
     for(const locale of ['zh-CN','en']) {
       setLanguage(locale);
       base.tools=toolList.map(tool=>({...tool,status:t(tool.id==='openocd'?'未配置':'检查完成')}));
