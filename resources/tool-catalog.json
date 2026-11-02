@@ -1,0 +1,52 @@
+[
+  {
+    "id": "armGnu",
+    "version": "14.2.rel1",
+    "platform": "win32-x64",
+    "url": "https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-mingw-w64-i686-arm-none-eabi.zip",
+    "allowedDownloadHosts": ["developer.arm.com", "armkeil.blob.core.windows.net"],
+    "sha256": "6facb152ce431ba9a4517e939ea46f057380f8f1e56b62e8712b3f3b87d994e1",
+    "archiveBytes": 305393359,
+    "maxExtractedBytes": 3221225472,
+    "maxFileBytes": 536870912,
+    "maxEntries": 60000,
+    "executables": {
+      "gcc": "bin/arm-none-eabi-gcc.exe",
+      "gpp": "bin/arm-none-eabi-g++.exe",
+      "gdb": "bin/arm-none-eabi-gdb.exe",
+      "objcopy": "bin/arm-none-eabi-objcopy.exe",
+      "objdump": "bin/arm-none-eabi-objdump.exe",
+      "nm": "bin/arm-none-eabi-nm.exe",
+      "size": "bin/arm-none-eabi-size.exe"
+    },
+    "licenseUrl": "https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads"
+  },
+  {
+    "id": "cmake", "version": "3.31.8", "platform": "win32-x64",
+    "url": "https://github.com/Kitware/CMake/releases/download/v3.31.8/cmake-3.31.8-windows-x86_64.zip",
+    "allowedDownloadHosts": ["github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"],
+    "sha256": "81aa9964dbabd71fe02e7ec50472fd3ad56138c49944515ece9001efbff8d719",
+    "archiveBytes": 46709267, "maxExtractedBytes": 209715200, "maxFileBytes": 52428800, "maxEntries": 12000,
+    "executables": { "cmake": "cmake-3.31.8-windows-x86_64/bin/cmake.exe" },
+    "licenseUrl": "https://cmake.org/licensing/"
+  },
+  {
+    "id": "ninja", "version": "1.12.1", "platform": "win32-x64",
+    "url": "https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-win.zip",
+    "allowedDownloadHosts": ["github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"],
+    "sha256": "f550fec705b6d6ff58f2db3c374c2277a37691678d6aba463adcbb129108467a",
+    "archiveBytes": 275425, "maxExtractedBytes": 2097152, "maxFileBytes": 2097152, "maxEntries": 10,
+    "executables": { "ninja": "ninja.exe" },
+    "licenseUrl": "https://github.com/ninja-build/ninja/blob/v1.12.1/COPYING"
+  },
+  {
+    "id": "openocd", "version": "0.12.0-6", "platform": "win32-x64",
+    "url": "https://github.com/xpack-dev-tools/openocd-xpack/releases/download/v0.12.0-6/xpack-openocd-0.12.0-6-win32-x64.zip",
+    "allowedDownloadHosts": ["github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"],
+    "sha256": "c57724f87219bafde78f61b54fb7f303f456fed9826a3d0ee2d54d461ad58020",
+    "archiveBytes": 3090548, "maxExtractedBytes": 41943040, "maxFileBytes": 16777216, "maxEntries": 3000,
+    "executables": { "openocd": "xpack-openocd-0.12.0-6/bin/openocd.exe" },
+    "scriptsDirectory": "xpack-openocd-0.12.0-6/openocd/scripts",
+    "licenseUrl": "https://github.com/xpack-dev-tools/openocd-xpack/blob/v0.12.0-6/LICENSE"
+  }
+]

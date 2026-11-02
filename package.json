@@ -1,0 +1,308 @@
+{
+  "name": "stm32-easy-tool-kit",
+  "displayName": "STM32 Easy Tool Kit",
+  "description": "%description%",
+  "version": "0.5.15",
+  "publisher": "local-stm32-tools",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Other",
+    "Debuggers"
+  ],
+  "keywords": [
+    "stm32",
+    "cmsis-dap",
+    "daplink",
+    "openocd",
+    "cmake"
+  ],
+  "main": "./out/extension.js",
+  "extensionKind": [
+    "ui"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "%capabilities.untrustedWorkspaces.description%"
+    },
+    "virtualWorkspaces": false
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "compile": "tsc -p .",
+    "vscode:prepublish": "npm run compile",
+    "package": "vsce package --allow-missing-repository --skip-license --no-rewrite-relative-links",
+    "test": "npm run compile && node --test tests/*.test.cjs",
+    "test:ui": "npm run compile && node scripts/webview-smoke.cjs"
+  },
+  "dependencies": {
+    "https-proxy-agent": "7.0.6",
+    "yauzl": "3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.9",
+    "@types/vscode": "1.96.0",
+    "@types/yauzl": "2.10.3",
+    "@vscode/vsce": "3.6.2",
+    "typescript": "5.9.3"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "stm32Easy.installTools",
+        "title": "%command.stm32Easy.installTools%"
+      },
+      {
+        "command": "stm32Easy.selectExistingTool",
+        "title": "%command.stm32Easy.selectExistingTool%"
+      },
+      {
+        "command": "stm32Easy.importToolArchive",
+        "title": "%command.stm32Easy.importToolArchive%"
+      },
+      {
+        "command": "stm32Easy.checkEnvironment",
+        "title": "%command.stm32Easy.checkEnvironment%"
+      },
+      {
+        "command": "stm32Easy.openTerminal",
+        "title": "%command.stm32Easy.openTerminal%"
+      },
+      {
+        "command": "stm32Easy.applyIntegration",
+        "title": "%command.stm32Easy.applyIntegration%"
+      },
+      {
+        "command": "stm32Easy.restoreIntegration",
+        "title": "%command.stm32Easy.restoreIntegration%"
+      },
+      {
+        "command": "stm32Easy.showDapGuide",
+        "title": "%command.stm32Easy.showDapGuide%"
+      },
+      {
+        "command": "stm32Easy.showLog",
+        "title": "%command.stm32Easy.showLog%"
+      },
+      {
+        "command": "stm32Easy.copyToolPath",
+        "title": "%command.stm32Easy.copyToolPath%"
+      },
+      {
+        "command": "stm32Easy.workbench.configure",
+        "title": "%command.stm32Easy.workbench.configure%",
+        "icon": "$(gear)",
+        "enablement": "!stm32Easy.workbenchBusy"
+      },
+      {
+        "command": "stm32Easy.workbench.build",
+        "title": "%command.stm32Easy.workbench.build%",
+        "icon": "$(tools)",
+        "enablement": "stm32Easy.canBuild"
+      },
+      {
+        "command": "stm32Easy.workbench.buildAndFlash",
+        "title": "%command.stm32Easy.workbench.buildAndFlash%",
+        "icon": "$(cloud-download)",
+        "enablement": "stm32Easy.canFlash"
+      },
+      {
+        "command": "stm32Easy.workbench.debug",
+        "title": "%command.stm32Easy.workbench.debug%",
+        "icon": "$(debug-alt)",
+        "enablement": "stm32Easy.canDebug"
+      },
+      {
+        "command": "stm32Easy.workbench.stop",
+        "title": "%command.stm32Easy.workbench.stop%",
+        "icon": "$(debug-stop)",
+        "enablement": "stm32Easy.workbenchBusy"
+      },
+      {
+        "command": "stm32Easy.workbench.settings",
+        "title": "%command.stm32Easy.workbench.settings%",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "stm32Easy.workbench.setup",
+        "title": "%command.stm32Easy.workbench.setup%",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "stm32Easy.workbench.externals",
+        "title": "%command.stm32Easy.workbench.externals%",
+        "icon": "$(library)"
+      },
+      {
+        "command": "stm32Easy.workbench.cubeMx",
+        "title": "%command.stm32Easy.workbench.cubeMx%",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "stm32Easy.clearVerificationCache",
+        "title": "%command.stm32Easy.clearVerificationCache%"
+      },
+      {
+        "command": "stm32Easy.workbench.selectProject",
+        "title": "%command.stm32Easy.workbench.selectProject%",
+        "enablement": "!stm32Easy.workbenchBusy"
+      },
+      {
+        "command": "stm32Easy.workbench.selectPreset",
+        "title": "%command.stm32Easy.workbench.selectPreset%",
+        "enablement": "!stm32Easy.workbenchBusy"
+      },
+      {
+        "command": "stm32Easy.workbench.selectBuildPreset",
+        "title": "%command.stm32Easy.workbench.selectBuildPreset%",
+        "enablement": "!stm32Easy.workbenchBusy"
+      },
+      {
+        "command": "stm32Easy.workbench.selectTarget",
+        "title": "%command.stm32Easy.workbench.selectTarget%",
+        "enablement": "!stm32Easy.workbenchBusy"
+      },
+      {
+        "command": "stm32Easy.workbench.showBuildLog",
+        "title": "%command.stm32Easy.workbench.showBuildLog%",
+        "icon": "$(output)"
+      },
+      {
+        "command": "stm32Easy.workbench.openCortexDebug",
+        "title": "%command.stm32Easy.workbench.openCortexDebug%"
+      },
+      {
+        "command": "stm32Easy.workbench.tools",
+        "title": "%command.stm32Easy.workbench.tools%"
+      },
+      {
+        "command": "stm32Easy.workbench.dap",
+        "title": "%command.stm32Easy.workbench.dap%"
+      },
+      {
+        "command": "stm32Easy.workbench.importClion",
+        "title": "%command.stm32Easy.workbench.importClion%",
+        "enablement": "!stm32Easy.workbenchBusy"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "stm32Easy",
+          "title": "STM32 Easy Tool Kit",
+          "icon": "resources/workbench/stm32.svg"
+        }
+      ]
+    },
+    "views": {
+      "stm32Easy": [
+        {
+          "id": "stm32Easy.project",
+          "name": "STM32 Easy Tool Kit",
+          "type": "webview"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "stm32Easy.workbench.settings",
+          "when": "view == stm32Easy.project",
+          "group": "navigation@4"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "stm32Easy.workbench.build",
+          "when": "stm32Easy.workbenchProject && !stm32Easy.workbenchBusy",
+          "group": "navigation@1"
+        },
+        {
+          "command": "stm32Easy.workbench.buildAndFlash",
+          "when": "stm32Easy.workbenchProject && !stm32Easy.workbenchBusy",
+          "group": "navigation@2"
+        },
+        {
+          "command": "stm32Easy.workbench.debug",
+          "when": "stm32Easy.workbenchProject && !stm32Easy.workbenchBusy",
+          "group": "navigation@3"
+        },
+        {
+          "command": "stm32Easy.workbench.stop",
+          "when": "stm32Easy.workbenchProject && stm32Easy.workbenchBusy",
+          "group": "navigation@1"
+        },
+        {
+          "command": "stm32Easy.workbench.cubeMx",
+          "when": "resourceExtname == .ioc",
+          "group": "navigation@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "STM32 Easy Tool Kit",
+      "properties": {
+        "stm32Easy.toolsDirectory": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%setting.stm32Easy.toolsDirectory.description%"
+        },
+        "stm32Easy.dap.backend": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "hid",
+            "usb_bulk"
+          ],
+          "default": "auto",
+          "scope": "machine",
+          "description": "%setting.stm32Easy.dap.backend.description%"
+        },
+        "stm32Easy.dap.serial": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%setting.stm32Easy.dap.serial.description%"
+        },
+        "stm32Easy.autoSetup": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "%setting.stm32Easy.autoSetup.description%"
+        },
+        "stm32Easy.autoRevealOutput": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "%setting.stm32Easy.autoRevealOutput.description%"
+        },
+        "stm32Easy.clearBuildOutput": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "%setting.stm32Easy.clearBuildOutput.description%"
+        },
+        "stm32Easy.cubeMxPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%setting.stm32Easy.cubeMxPath.description%"
+        },
+        "stm32Easy.verification.strictHashing": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "description": "%setting.stm32Easy.verification.strictHashing.description%"
+        }
+      }
+    }
+  }
+}

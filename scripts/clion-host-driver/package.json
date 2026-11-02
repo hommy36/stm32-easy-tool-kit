@@ -1,0 +1,8 @@
+{
+  "name": "stm32-clion-verification-driver",
+  "publisher": "local-test",
+  "version": "0.0.1",
+  "engines": { "vscode": "^1.96.0" },
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.cjs"
+}

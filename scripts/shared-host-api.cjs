@@ -1,0 +1,34 @@
+// Verify storage and target detection from the installed VSIX when desktop input is unavailable.
+const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),vscode=require('vscode');
+exports.run=async()=>{
+  const context=JSON.parse(await fs.readFile(path.resolve(__dirname,'../.cache/shared-host-context.json'),'utf8'));
+  const extension=vscode.extensions.getExtension('local-stm32-tools.stm32-easy-tool-kit');assert.equal(extension.packageJSON.version,context.version);await extension.activate();
+  const {ProjectStore}=require(path.join(extension.extensionPath,'out/project/store'));
+  const {ToolState}=require(path.join(extension.extensionPath,'out/tools/state'));
+  const {detectChipTargets}=require(path.join(extension.extensionPath,'out/project/targetDetection'));
+  const state=new ToolState(path.join(context.storage,'active')),beforeTools=await state.list(),scripts=beforeTools.find(tool=>tool.id==='openocd').scriptsDirectory;
+  const uri=vscode.Uri.file(context.source).toString(),store=new ProjectStore(path.join(context.storage,'projects'),async()=>scripts),current=await store.read(uri);
+  const candidates=await detectChipTargets(context.source,scripts);assert.equal(candidates.length,1);assert.equal(candidates[0].available,true);assert.equal(candidates[0].targetScript,'target/stm32h7x.cfg');
+  const legacy=path.join(context.source,'.stm32-easy.json'),legacyBefore=await fs.readFile(legacy,'utf8').catch(error=>{if(error.code!=='ENOENT')throw error;});
+  const saved=await store.save({...current.settings,shareInProject:true,chipLabel:candidates[0].label,targetScript:candidates[0].targetScript,scriptKind:'target',chipConfirmed:false},current.revision);
+  await store.save({...saved.settings,speedKHz:4000},saved.revision);
+  const file=path.join(context.source,'.vscode/stm32-easy.json'),config=JSON.parse(await fs.readFile(file,'utf8'));
+  assert.equal(config.speedKHz,4000);assert.equal(config.targetScript.path,'target/stm32h7x.cfg');
+  const text=JSON.stringify(config);for(const key of ['tools','executables','chipConfirmed','serial','projectUri','artifactPath'])assert.equal(text.includes('"'+key+'"'),false);
+  assert.equal(text.includes(':\\'),false);assert.deepEqual(await state.list(),beforeTools);
+  const teammate=await new ProjectStore(path.join(context.output,'teammate-api-local')).read(uri);
+  assert.equal(teammate.settings.shareInProject,true);assert.equal(teammate.settings.chipConfirmed,false);assert.equal(teammate.settings.speedKHz,4000);
+  if(legacyBefore!==undefined)assert.equal(await fs.readFile(legacy,'utf8'),legacyBefore);
+  const scratch=await fs.mkdtemp(path.join(context.output,'delete-installed-')),scratchProject=path.join(scratch,'project');await fs.mkdir(scratchProject);
+  const scratchUri=vscode.Uri.file(scratchProject).toString(),scratchStore=new ProjectStore(path.join(scratch,'local'));
+  const {defaultProjectSettings}=require(path.join(extension.extensionPath,'out/project/types'));
+  const initial=await scratchStore.save({...defaultProjectSettings(scratchUri,scratchProject),shareInProject:true,configurePreset:'Debug'},0);
+  await fs.writeFile(path.join(scratchProject,'CMakeLists.txt'),'project(keep)');await fs.writeFile(path.join(scratchProject,'.vscode/settings.json'),'{}');
+  await scratchStore.remove(scratchUri,scratchProject,initial.revision);
+  await assert.rejects(fs.stat(path.join(scratchProject,'.vscode/stm32-easy.json')),{code:'ENOENT'});
+  assert.equal(await fs.readFile(path.join(scratchProject,'CMakeLists.txt'),'utf8'),'project(keep)');assert.equal(await fs.readFile(path.join(scratchProject,'.vscode/settings.json'),'utf8'),'{}');
+  await assert.rejects(scratchStore.save(initial.settings,initial.revision));
+  await vscode.commands.executeCommand('stm32Easy.workbench.settings');
+  const result={version:extension.packageJSON.version,extensionPath:extension.extensionPath,installedApiSave:true,canonicalLocation:true,legacyUnchanged:legacyBefore!==undefined,installedApiDelete:true,staleSaveBlocked:true,subsequentSaveSynced:true,automaticTarget:true,toolRecordsUnchanged:true,sharedFieldsOnly:true,freshLocalStoreReadsProject:true,nativeUiClickVerified:false,hardwareTested:false};
+  await fs.writeFile(path.join(context.output,'shared-host-api-result.json'),JSON.stringify(result,null,2));
+};

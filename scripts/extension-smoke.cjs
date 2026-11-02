@@ -1,0 +1,38 @@
+// VS Code --extensionTestsPath entry point. See docs/verification.md.
+const vscode=require('vscode');
+const fs=require('node:fs/promises');
+const path=require('node:path');
+const assert=require('node:assert/strict');
+exports.run=async()=>{
+  const context=JSON.parse(await fs.readFile(path.resolve(__dirname,'../.cache/extension-smoke-context.json'),'utf8'));
+  const progress=message=>fs.appendFile(path.join(context.output,'installed-progress.log'),message+'\n');
+  await progress('start');
+  const extension=vscode.extensions.getExtension('local-stm32-tools.stm32-easy-tool-kit');
+  assert.ok(extension);assert.equal(extension.packageJSON.version,context.version);await extension.activate();await progress('activated');
+  const projectFiles=await fs.readdir(context.projects);
+  const before=JSON.parse(await fs.readFile(path.join(context.projects,projectFiles.find(file=>file.endsWith('.json'))),'utf8'));
+  assert.equal(before.settings.schemaVersion,1);
+  const sourceFiles=['main.c','CMakeLists.txt','CMakePresets.json'];
+  const contents=await Promise.all(sourceFiles.map(file=>fs.readFile(path.join(context.source,file),'utf8')));
+  await vscode.commands.executeCommand('stm32Easy.project.focus');
+  await progress('console');
+  await vscode.commands.executeCommand('stm32Easy.workbench.setup');
+  await vscode.commands.executeCommand('stm32Easy.workbench.tools');
+  await progress('panels');
+  await vscode.commands.executeCommand('stm32Easy.checkEnvironment','cmake');
+  await progress('tool check');
+  await vscode.commands.executeCommand('stm32Easy.workbench.configure');
+  await progress('configure');
+  await vscode.commands.executeCommand('stm32Easy.workbench.build');
+  await progress('build');
+  const after=JSON.parse(await fs.readFile(path.join(context.projects,projectFiles.find(file=>file.endsWith('.json'))),'utf8'));
+  assert.equal(after.settings.schemaVersion,1);assert.equal(after.settings.configurePreset,'Debug');assert.ok(after.settings.targetId);
+  assert.equal(after.settings.speedKHz,before.settings.speedKHz);
+  assert.ok((await fs.stat(context.artifact)).size>52);
+  for(let index=0;index<sourceFiles.length;index++)assert.equal(await fs.readFile(path.join(context.source,sourceFiles[index]),'utf8'),contents[index]);
+  const diagnostics=vscode.languages.getDiagnostics().filter(([uri])=>uri.fsPath.startsWith(context.source));
+  assert.equal(diagnostics.flatMap(([,items])=>items).filter(item=>item.severity===vscode.DiagnosticSeverity.Error).length,0);
+  const report={version:extension.packageJSON.version,extensionPath:extension.extensionPath,legacySchemaPreserved:true,setupAndToolsCommands:true,configureAndBuild:true,sourceFilesUnchanged:true,diagnosticsErrors:0,hardwareTested:false};
+  await fs.writeFile(path.join(context.output,'installed-result.json'),JSON.stringify(report,null,2));
+  console.log(JSON.stringify(report));
+};

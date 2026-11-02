@@ -1,0 +1,15 @@
+.superpowers/**
+.cache/**
+docs/superpowers/**
+tests/**
+test/**
+scripts/**
+src/**
+tsconfig.json
+.gitignore
+**/*.map
+node_modules/.bin/**
+node_modules/typescript/**
+node_modules/@types/**
+node_modules/@vscode/vsce/**
+*.vsix

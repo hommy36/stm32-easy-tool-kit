@@ -1,0 +1,49 @@
+import { t } from '../i18n';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import { runProcess } from '../core/process';
+import { CheckResult, ToolInstallation, errorText } from '../core/types';
+
+export async function checkInstallation(tool: ToolInstallation, signal?: AbortSignal): Promise<CheckResult[]> {
+  signal?.throwIfAborted();
+  const checks: CheckResult[] = [];
+  for (const [name, executable] of Object.entries(tool.executables)) {
+    signal?.throwIfAborted();
+    let valid = false;
+    try { valid = path.isAbsolute(executable) && (await fs.stat(executable)).isFile(); } catch (error) {
+      checks.push({ code: 'file', status: 'error', summary: t("工具文件不可访问: {0}", name), evidence: [executable, errorText(error)] });
+      continue;
+    }
+    if (!valid) { checks.push({ code: 'file', status: 'error', summary: t("工具路径必须指向绝对 exe 文件"), evidence: [executable] }); continue; }
+    const result = await runProcess({ executable, args: ['--version'], timeoutMs: 10000, signal });
+    const evidence = [result.stdout.trim() || result.stderr.trim(), executable];
+    const success = result.exitCode === 0 && !result.timedOut && !result.cancelled;
+    checks.push({ code: name === Object.keys(tool.executables)[0] ? 'version' : `version.${name}`,
+      status: success ? 'ok' : 'error', summary: success ? t("{0} 可运行", name) : t("{0} 无法运行（退出码 {1}）", name, result.exitCode),
+      evidence: success ? evidence : [...evidence, result.stderr, result.timedOut ? t("执行超时") : t("请检查 DLL 和安装完整性")] });
+  }
+  if (tool.id === 'armGnu' && tool.executables.gcc) {
+    const result = await runProcess({ executable: tool.executables.gcc, args: ['-dumpmachine'], timeoutMs: 10000, signal });
+    checks.push({ code: 'target', status: result.exitCode === 0 && result.stdout.trim() === 'arm-none-eabi' ? 'ok' : 'error', summary: t("编译器目标必须为 arm-none-eabi"), evidence: [result.stdout.trim(), result.stderr] });
+  }
+  if (tool.id === 'openocd') {
+    const script = tool.scriptsDirectory ? path.join(tool.scriptsDirectory, 'interface/cmsis-dap.cfg') : '';
+    let found = false;
+    try { found = Boolean(script) && (await fs.stat(script)).isFile(); } catch (error) {
+      checks.push({ code: 'scripts.detail', status: 'error', summary: t("OpenOCD 脚本不可访问"), evidence: [errorText(error)] });
+    }
+    checks.push({ code: 'scripts', status: found ? 'ok' : 'error', summary: found ? t("找到 CMSIS-DAP 接口脚本") : t("缺少 CMSIS-DAP 接口脚本"), evidence: [script] });
+    if (!checks.some(check => check.status === 'error')) {
+      for (const backend of ['hid', 'usb_bulk']) {
+        const result = await runProcess({ executable: tool.executables.openocd,
+          args: ['-c', 'adapter driver cmsis-dap', '-c', `cmsis_dap_backend ${backend}`, '-c', 'shutdown'], timeoutMs: 10000, signal });
+        checks.push({ code: `dap.${backend}`, status: result.exitCode === 0 ? 'ok' : 'error',
+          summary: t("CMSIS-DAP {0} 配置能力{1}", backend, result.exitCode === 0 ? t("可用") : t("不可用")),
+          evidence: [result.stdout, result.stderr] });
+      }
+    }
+    checks.push({ code: 'hardware', status: 'unverified', summary: t("DAP 探针与目标芯片通信未验证"), evidence: [t("软件配置检查不会打开探针、复位或烧录目标。")] });
+  }
+  if (tool.source === 'external') checks.push({ code: 'compatibility', status: 'warning', summary: t("外部安装未纳入固定版本组合认证"), evidence: [t("可运行性已单独检查，硬件兼容性需按实际组合验证。")] });
+  return checks;
+}
