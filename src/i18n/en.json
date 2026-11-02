@@ -630,6 +630,7 @@
   "已有操作或调试正在进行，请先等待完成或停止": "An operation or debug session is already running. Wait or stop it first.",
   "已有操作或调试正在进行：{0}": "An operation or debug session is already running: {0}",
   "工具安装或检查尚未结束": "Tool installation or check is still running",
+  "设置正在保存": "Settings are being saved",
   "设置正在保存或读取": "Settings are being saved or loaded",
   "调试会话尚未结束": "A debug session is still running",
   "当前构建或烧录尚未结束": "A build or flash operation is still running",

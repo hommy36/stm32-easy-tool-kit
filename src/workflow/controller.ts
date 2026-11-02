@@ -38,6 +38,7 @@ export class WorkflowController {
   private readonly metadataSources = new Map<string, string>();
   private readonly configured = new Map<string, Configured>();
   private readonly approvals = new Map<string, Set<string>>();
+  private readonly presetLoads = new Map<string, Promise<PresetMetadata>>();
   constructor(private readonly store: ProjectStore, private readonly toolSource: { list(): Promise<ToolInstallation[]>; readonly isBusy?: boolean },
     private readonly host: WorkflowHost, private readonly hardware: HardwareWorkflow, private readonly lockDirectory: string,
     private readonly buildFactory: (tools: ToolInstallation[]) => BuildBackend = tools => new BuildService(tools, host.log.bind(host), host.guard.bind(host)),
@@ -89,7 +90,7 @@ export class WorkflowController {
   }
   private busyReason(): string | undefined {
     if (this.toolSource.isBusy) return t('工具安装或检查尚未结束');
-    if (this.editing) return t('设置正在保存或读取');
+    if (this.editing) return t('设置正在保存');
     if (this.activeDebug) return t('调试会话尚未结束');
     if (this.running) return t('当前构建或烧录尚未结束');
     if (this.snapshot.phase === 'uncertain') return t('上次操作状态不确定');
@@ -158,10 +159,16 @@ export class WorkflowController {
     }
   }
   async loadChoices(uri?: string): Promise<PresetMetadata> {
-    this.assertEditable();
     const projectUri = uri ?? await this.ensureProjectUri();
+    const existing = this.presetLoads.get(projectUri);
+    if (existing) return existing;
+    const task = this.loadPresets(projectUri);
+    this.presetLoads.set(projectUri, task);
+    try { return await task; }
+    finally { if (this.presetLoads.get(projectUri) === task) this.presetLoads.delete(projectUri); }
+  }
+  private async loadPresets(projectUri: string): Promise<PresetMetadata> {
     this.assertEditable();
-    this.editing = true;
     const controller = new AbortController();
     this.abort = controller;
     this.publish('configuring', t("正在读取已有构建方案（不配置工程）"), { projectUri });
@@ -174,13 +181,14 @@ export class WorkflowController {
         { allowExternal: file => this.approve(projectUri, file, 'Presets include') });
       this.host.guard();
       if (controller.signal.aborted) throw new BuildCancelled();
+      const latest = await this.project(projectUri);
+      if (latest.revision !== project.revision) return metadata;
       this.metadata.set(projectUri, metadata);
       this.metadataSources.set(projectUri, project.settings.sourceDirectory);
       this.publish('idle', t("已有构建方案已读取"));
       return metadata;
     } catch (error) { this.publish(error instanceof BuildCancelled ? 'cancelled' : 'failed', errorText(error)); throw error; }
     finally {
-      this.editing = false;
       if (this.abort === controller) this.abort = undefined;
       this.publish(this.snapshot.phase, this.snapshot.message);
     }

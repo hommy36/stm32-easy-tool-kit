@@ -25,3 +25,24 @@ test('stop clears an uncertain in-memory state only when no operation locks exis
  assert.equal(locked.getSnapshot().phase,'uncertain','locks must keep the busy state');
  await fs.rm(directory,{recursive:true,force:true});
 });
+test('reading presets does not block project editing and concurrent reads share one request',async()=>{
+ const directory=await fs.mkdtemp(path.join(os.tmpdir(),'stm32-presets-'));
+ await fs.writeFile(path.join(directory,'CMakeLists.txt'),'project(x C)\n');
+ const {defaultProjectSettings}=require('../out/project/types');
+ const uri=require('node:url').pathToFileURL(directory).toString(),settings=defaultProjectSettings(uri,directory);
+ let release,requests=0;
+ const pending=new Promise(resolve=>{release=resolve;});
+ const metadata={configure:[],builds:[],inputFiles:[],compatibleBuilds:()=>[],resolve:()=>({})};
+ const store={read:async()=>({revision:1,settings})};
+ const testHost={...host,projects:()=>[{uri,directory,label:'main'}]};
+ const workflow=new WorkflowController(store,{list:async()=>[]},testHost,{},directory,
+  ()=>({presets:async()=>{requests++;return pending;}}),uri);
+ const first=workflow.loadChoices(uri);
+ const second=workflow.loadChoices(uri);
+ await new Promise(resolve=>setTimeout(resolve,20));
+ assert.equal(workflow.isWorkflowBusy,false,'reading presets must not lock editing');
+ assert.equal(requests,1,'concurrent reads must share one request');
+ release(metadata);
+ await Promise.all([first,second]);
+ await fs.rm(directory,{recursive:true,force:true});
+});

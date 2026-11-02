@@ -2,7 +2,7 @@
   "name": "stm32-easy-tool-kit",
   "displayName": "STM32 Easy Tool Kit",
   "description": "%description%",
-  "version": "0.5.16",
+  "version": "0.5.17",
   "publisher": "local-stm32-tools",
   "license": "MIT",
   "private": true,
