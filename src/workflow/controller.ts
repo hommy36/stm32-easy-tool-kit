@@ -87,7 +87,18 @@ export class WorkflowController {
     if (!project) throw new BuildCancelled();
     return project.settings.projectUri;
   }
-  private assertEditable(): void { if (this.isBusy) throw new Error(t("已有操作或调试正在进行，请先等待完成或停止")); }
+  private busyReason(): string | undefined {
+    if (this.toolSource.isBusy) return t('工具安装或检查尚未结束');
+    if (this.editing) return t('设置正在保存或读取');
+    if (this.activeDebug) return t('调试会话尚未结束');
+    if (this.running) return t('当前构建或烧录尚未结束');
+    if (this.snapshot.phase === 'uncertain') return t('上次操作状态不确定');
+    return undefined;
+  }
+  private assertEditable(): void {
+    const reason = this.busyReason();
+    if (reason) throw new Error(t('已有操作或调试正在进行：{0}', reason));
+  }
   private async project(uri: string): Promise<SavedProject> {
     const entry = this.host.projects().find(project => projectKeyUri(project.uri) === projectKeyUri(uri));
     if (!entry) throw new Error(t("工程不属于当前工作区，请明确选择工作区文件夹"));
@@ -232,7 +243,8 @@ export class WorkflowController {
     await this.saveSettings({ ...current.settings, targetId: target.id, configuration: target.configuration, preferredTarget: target.name }, current.revision);
   }
   run(action: WorkflowAction, projectUri: string): Promise<void> {
-    if (this.isBusy) return Promise.reject(new Error(t("已有操作或调试正在进行，请先等待完成或停止")));
+    const reason = this.busyReason();
+    if (reason) return Promise.reject(new Error(t('已有操作或调试正在进行：{0}', reason)));
     const controller = new AbortController();
     const id = randomUUID();
     this.abort = controller;
@@ -446,6 +458,10 @@ export class WorkflowController {
       } else {
         this.abort?.abort();
         if (this.running) { try { await this.running; } catch (error) { if (!(error instanceof BuildCancelled)) this.host.log('stderr', `${errorText(error)}\n`); } }
+        if (!this.running && !this.editing && this.snapshot.phase === 'uncertain') {
+          const locks = await fs.readdir(this.lockDirectory).catch(() => [] as string[]);
+          if (!locks.length) this.publish('idle', t('已清除内存中的占用状态；未发现构建或硬件锁'));
+        }
       }
     })();
     try { await this.stopping; } finally { this.stopping = undefined; }
