@@ -29,8 +29,8 @@ test('debug dependency and path restriction do not block build or flash', () => 
   }
 });
 test('Cortex-Debug version boundaries', () => {
-  for(const value of ['1.12.1','1.13.0']) assert.ok(cortexCompatible(value));
-  for(const value of ['1.12.0','2.0.0','bad',undefined]) assert.equal(cortexCompatible(value),false);
+  for(const value of ['1.12.1','1.13.0','1.13.0-pre6','1.13.0-pre6-universal','1.13.0+build.7']) assert.ok(cortexCompatible(value), value);
+  for(const value of ['1.12.0','1.11.9','2.0.0-pre1','bad','',undefined]) assert.equal(cortexCompatible(value),false,String(value));
 });
 test('error recovery routes to useful destinations', () => {
   assert.equal(repairForError('编译失败'), 'problems'); assert.equal(repairForError('请先选择或安装 CMake'),'tools');

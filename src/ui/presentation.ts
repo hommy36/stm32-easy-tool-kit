@@ -9,7 +9,7 @@ export interface ToolSummary {
   available: boolean; status: string; checks: CheckResult[];
 }
 export function cortexCompatible(version: unknown): boolean {
-  const match = typeof version === 'string' ? /^(\d+)\.(\d+)\.(\d+)$/.exec(version) : null;
+  const match = typeof version === 'string' ? /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(version) : null;
   return !!match && +match[1] === 1 && (+match[2] > 12 || +match[2] === 12 && +match[3] >= 1);
 }
 export function capabilities(input: {

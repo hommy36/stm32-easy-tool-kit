@@ -6,6 +6,7 @@ import { BuildEvidence } from '../build/artifacts';
 import { BuildCancelled, ProcessTreeUncertain } from '../build/service';
 import { OwnedGdbServer } from '../dap/server';
 import { ProjectSettings } from '../project/types';
+import { cortexCompatible } from '../ui/presentation';
 
 export class CortexDebugUnavailable extends Error { }
 type DebugApi = Pick<typeof vscode, 'debug' | 'extensions'>;
@@ -26,11 +27,8 @@ async function bounded<T>(promise: PromiseLike<T>, milliseconds: number, message
 }
 export async function ensureCortexDebug(api: DebugApi = vscode): Promise<void> {
   const extension = api.extensions.getExtension('marus25.cortex-debug');
-  const raw: unknown = extension?.packageJSON;
-  const version = raw && typeof raw === 'object' && 'version' in raw ? raw.version : undefined;
-  const match = typeof version === 'string' ? /^(\d+)\.(\d+)\.(\d+)$/.exec(version) : undefined;
-  if (!extension || !match || Number(match[1]) !== 1 || Number(match[2]) < 12
-    || Number(match[2]) === 12 && Number(match[3]) < 1) {
+  const version = extension?.packageJSON && typeof extension.packageJSON === 'object' ? extension.packageJSON.version : undefined;
+  if (!extension || !cortexCompatible(version)) {
     throw new CortexDebugUnavailable(t("调试需要 Cortex-Debug 1.12.1 或兼容的 1.x 版本；请安装或更新后重试。编译和独立烧录不受影响。"));
   }
   await extension.activate();
