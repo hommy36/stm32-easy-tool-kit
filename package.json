@@ -2,9 +2,18 @@
   "name": "stm32-easy-tool-kit",
   "displayName": "STM32 Easy Tool Kit",
   "description": "%description%",
-  "version": "0.6.1",
-  "publisher": "local-stm32-tools",
+  "version": "0.6.2",
+  "publisher": "hommy36",
   "license": "MIT",
+  "icon": "resources/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hommy36/stm32-easy-tool-kit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hommy36/stm32-easy-tool-kit/issues"
+  },
+  "homepage": "https://github.com/hommy36/stm32-easy-tool-kit#readme",
   "private": true,
   "engines": {
     "vscode": "^1.96.0"
@@ -17,8 +26,11 @@
     "stm32",
     "cmsis-dap",
     "daplink",
+    "st-link",
+    "jlink",
     "openocd",
-    "cmake"
+    "cmake",
+    "cortex-debug"
   ],
   "main": "./out/extension.js",
   "extensionKind": [
@@ -38,7 +50,7 @@
     "check": "tsc --noEmit",
     "compile": "tsc -p .",
     "vscode:prepublish": "npm run compile",
-    "package": "vsce package --allow-missing-repository --skip-license --no-rewrite-relative-links",
+    "package": "vsce package --no-rewrite-relative-links",
     "test": "npm run compile && node --test tests/*.test.cjs",
     "test:ui": "npm run compile && node scripts/webview-smoke.cjs"
   },

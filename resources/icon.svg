@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a1c2e"/>
+      <stop offset="1" stop-color="#12507d"/>
+    </linearGradient>
+    <linearGradient id="chipStroke" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#bfdcf7"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffc94d"/>
+      <stop offset="1" stop-color="#ff9f1a"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <rect x="2" y="2" width="124" height="124" rx="26" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2.5"/>
+  <g stroke="#79b0dd" stroke-width="5" stroke-linecap="round" opacity="0.9">
+    <path d="M44 22v12M64 22v12M84 22v12M44 94v12M64 94v12M84 94v12"/>
+    <path d="M22 44h12M22 64h12M22 84h12M94 44h12M94 64h12M94 84h12"/>
+  </g>
+  <rect x="34" y="34" width="60" height="60" rx="10" fill="#0c2740" stroke="url(#chipStroke)" stroke-width="5"/>
+  <rect x="43" y="43" width="42" height="42" rx="5" fill="#0f3355" opacity="0.85"/>
+  <path d="M69.5 47 55 69.5h10.6L60 84l17-25.5H66z" fill="url(#bolt)" stroke="#ffd98a" stroke-width="1.6" stroke-linejoin="round"/>
+  <circle cx="44" cy="44" r="2.6" fill="#7fb3e0" opacity="0.8"/>
+</svg>
