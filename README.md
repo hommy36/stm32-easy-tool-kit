@@ -4,7 +4,7 @@
 
 面向 Windows x64、已有 STM32 CMake 工程；支持 **DAPLink / CMSIS-DAP、ST-Link、J-Link** 的 SWD 烧录与调试，调试复用 Cortex-Debug。
 
-> **当前为 0.6.x 测试版，未发布 Marketplace。** 软件侧构建、取消、诊断和界面流程已验收；DAPLink / ST-Link 做过实机准备检查，J-Link 仅完成参数与软件层验证，真实板卡烧录、断点、单步和变量检查尚未全部完成，详见 [验证记录](docs/verification.md)。
+> **已在 VS Code Marketplace 上架**（`hommy36.stm32-easy-tool-kit`）。软件侧构建、取消、诊断和界面流程已验收；DAPLink / ST-Link 做过实机准备检查，J-Link 仅完成参数与软件层验证，真实板卡烧录、断点、单步和变量检查尚未全部完成，详见 [验证记录](docs/verification.md)。
 
 ## 功能
 
@@ -31,14 +31,18 @@
 
 ## 安装
 
-从仓库 **Releases** 下载最新的 `stm32-easy-tool-kit-*.vsix`，或自行打包：
+在 VS Code 扩展视图搜索 **STM32 Easy Tool Kit**，或直接打开：
+
+https://marketplace.visualstudio.com/items?itemName=hommy36.stm32-easy-tool-kit
+
+也可以从仓库 **Releases** 下载最新的 `stm32-easy-tool-kit-*.vsix`，或自行打包：
 
 ```bash
 npm ci
 npm run package
 ```
 
-然后在 VS Code 扩展视图右上角菜单选择 **从 VSIX 安装**，安装后重载窗口。插件不会自动安装工具或第三方扩展。
+VSIX 安装方式：在 VS Code 扩展视图右上角菜单选择 **从 VSIX 安装**，安装后重载窗口。插件不会自动安装工具或第三方扩展。
 
 ## 快速开始
 

@@ -1,5 +1,11 @@
 # 更新记录
 
+## 0.6.3 — 2026-11-03
+
+- 已在 **VS Code Marketplace** 上架：`hommy36.stm32-easy-tool-kit`，可直接在扩展视图搜索安装。
+- 发布方式改为 GitHub Actions + Marketplace Trusted Publishing（OIDC），不再需要 PAT，也不要求 Azure 订阅。
+- README 更新安装入口与上架状态。
+
 ## 0.6.2 — 2026-11-03
 
 - 新增 Marketplace 发布者 ID `hommy36` 与扩展图标（128×128，深蓝芯片 + 橙色闪电）。
