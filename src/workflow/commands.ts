@@ -20,7 +20,8 @@ export function registerWorkflowCommands(_context: vscode.ExtensionContext, cont
       if (error instanceof BuildCancelled) return;
       const repair = error instanceof CortexDebugUnavailable ? 'cortex' : repairForError(errorText(error));
       const primary = repairLabel(repair);
-      const choice = await vscode.window.showErrorMessage(`STM32: ${redact(errorText(error)).slice(0, 500)}`, primary, t("查看构建日志"));
+      const actions = [...new Set([primary, t("查看构建日志")])];
+      const choice = await vscode.window.showErrorMessage(`STM32: ${redact(errorText(error)).slice(0, 500)}`, ...actions);
       if (choice === primary) await vscode.commands.executeCommand(consoleCommands[repair]);
       else if (choice) await vscode.commands.executeCommand('stm32Easy.workbench.showBuildLog');
     }

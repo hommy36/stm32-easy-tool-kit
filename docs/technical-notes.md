@@ -2,7 +2,7 @@
 
 ## 平台与工程
 
-支持 Windows x64、本地 VS Code 1.96 及以上版本、可信的本地文件工作区。工程需已有 CMakeLists.txt 和可解析输出目录的 Configure Preset。硬件范围为 DAPLink / CMSIS-DAP、ST-Link、J-Link 与 SWD；J-Link 仅完成软件层验证。
+支持 Windows x64、本地 VS Code 1.96 及以上版本、可信的本地文件工作区。工程需已有 CMakeLists.txt；可使用现有 Presets、CLion Profile 或插件本地自动方案。硬件范围为 DAPLink / CMSIS-DAP、ST-Link、J-Link 与 SWD；J-Link 仅完成软件层验证。
 
 不生成 HAL 工程，不转换 Keil 工程，不替代 CubeMX。Linux、macOS、Windows ARM64、WSL、SSH、容器和 Web 版 VS Code 尚不支持。
 
@@ -50,4 +50,9 @@
 
 不后台连接探针；盘符、串口或工具检查成功不表示调试接口在线。历史烧录结果附时间。电机等执行器工程在硬件操作前应切断动力电源，仅保留控制板供电。
 
-0.5.3 为 VSIX 测试版，未上架 Marketplace；真实烧录、main 断点、单步和变量显示尚未完成本轮验收。没有遥测或上传工程内容的实现。
+现有产品已上架 Marketplace；本次源码版本 0.7.2 为本地实验构建，未发布。新增静态分析、运行监测和开发辅助见 memory-workbench.md；具体软件证据与硬件未完成项见 verification-0.7.md。没有遥测或上传工程内容的实现。
+
+
+## 0.7 独立功能层
+
+MemoryAnalysisService 与 RuntimeMonitorService 独立于构建判定。新增 feature 配置版本为 1，不替换旧工程配置。RTT 复用受管 OpenOCD 的回环端口和硬件操作锁；attach 不发送 halt/reset/download。运行数据与历史报告都不是硬件授权。报告缓存最多 20 份 + 基线（另有字节上限），曲线保留 10 分钟，串口日志有界。详情及已知限制见 [内存工作台](memory-workbench.md)。

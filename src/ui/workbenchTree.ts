@@ -54,7 +54,7 @@ export class WorkbenchConsole implements vscode.WebviewViewProvider, vscode.Disp
         if (this.handling) throw new Error(t("当前操作正在处理，请稍候"));
         this.handling = true; acquired = true;
         const state = await workbenchState(this.controller, this.tools);
-        const mutable = ['project', 'preset', 'target', 'probe', 'build', 'flash', 'debug', 'configure', 'loadChoices', 'cubeMx', 'terminal', 'externals', 'clion'];
+        const mutable = ['project', 'preset', 'target', 'probe', 'optimization', 'build', 'flash', 'debug', 'configure', 'loadChoices', 'cubeMx', 'terminal', 'externals', 'clion'];
         if (mutable.includes(message.action)) {
           if (state.busy) throw new Error(t("当前操作尚未结束，请先停止或等待完成"));
           if (message.projectUri !== (state.project?.settings.projectUri ?? '') || message.revision !== (state.project?.revision ?? 0)
@@ -62,6 +62,7 @@ export class WorkbenchConsole implements vscode.WebviewViewProvider, vscode.Disp
         }
         if (message.action === 'project') { await this.controller.selectProject(message.value); await this.ensurePresets(); }
         else if (message.action === 'preset') await this.controller.selectConfigurePreset(message.value);
+        else if (message.action === 'optimization') await this.controller.selectOptimization(message.value!, message.featureRevision!);
         else if (message.action === 'target') await this.controller.selectTarget(message.value, message.configuration);
         else if (message.action === 'probe') await this.controller.selectProbe(message.value ?? '');
         else if (message.action === 'loadChoices') await this.controller.loadChoices();

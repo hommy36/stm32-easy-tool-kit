@@ -1,4 +1,94 @@
+# Changelog
+
+## 0.7.12 — 2026-11-07
+
+- Includes the memory workbench, optional RTT monitoring, Chinese documentation, tool discovery and C5 fixes developed in the local 0.7.x builds below. Runtime monitoring and the C5 tool package remain experimental; hardware validation is limited to recorded combinations.
+- Added a compact optimization selector beside the build preset: Default, -O0, -Og, -O1, -O2, -O3, -Os and -Oz. Default follows the preset; explicit levels override C/C++ optimization on the next build and persist per project.
+- Overrides keep the original build type and debug definitions, append to compiler/link rules after target and source flags, preserve existing CMake project hooks, and restore preset behavior on Default. Effective C/C++ commands are checked before building; unsupported custom rules fail explicitly.
+- Optimization changes invalidate cached configuration and firmware evidence; feature revisions protect cross-window edits and changes during a build.
+- Verified 178 tests, bilingual sidebar interactions at 320px in three themes, all levels with real Arm GCC, and the STM32C593 CubeMX2 project at -Os then Default (141 C units, separate build directory). No hardware operation performed.
+
+## 0.7.11 (local experimental build)
+
+- Fixed C5 examine-end callback scope: import `_CHIPNAME`, `dev_id_loader` and `EXAMINED` into the callback frame after loading the verified vendor script. Applies to flash and managed debug startup without modifying the downloaded tools.
+- OpenOCD failure notifications now prioritize actual Tcl/driver errors over banners and probe capability listings.
+- Reproduced the reported missing-variable failure with the real OpenOCD interpreter and simulated memory/loader commands; verified all three C5 loader mappings, capacities and repeated callbacks. No hardware writes were performed.
+
+## 0.7.10 (local experimental build)
+
+- Compiler mismatch errors now show the actual command compiler and selected tool paths, with Manage Tools as the recovery action. Dependency verification remains enforced.
+- Removed duplicate build-log buttons from workflow error notifications.
+
+## 0.7.9 (local experimental build)
+
+- Added an optional Experimental STM32C5 OpenOCD installer: pinned third-party EmberProbe build with ST stldr/C5 patches and local DFP flash loaders. Standard xPack remains a separate choice.
+- Added bounded TAR.GZ extraction, offline import, loader/configuration hash checks and a configuration-only stldr preflight before probe access. C5 tools/target settings continue to use the existing flash verification, cancellation and managed session lifecycle.
+- CMSIS-DAP, direct ST-Link and J-Link configuration checks passed on Windows x64 without connecting hardware. Physical C5 erase/write/verify/reset/debug remain unverified.
+
+## 0.7.8 (local experimental build)
+
+- Existing-tool selection now discovers completed extension downloads from the default/custom tool directories and includes the current installation with source/version labels. Discovery reads installation metadata without running tools; selection still checks the executable and preserves managed installation identity.
+- Clarified the C5 hardware limitation: bundled OpenOCD 0.12.0-6 and the user's previous 0.12.0 both lack `stm32c5x.cfg`; the plugin cannot configure C5 flashing/debugging with these packages. A compatible target script and flash driver are required.
+
+## 0.7.7 (local experimental build)
+
+- Preserve multiline CMake errors and identify CubeMX2 `$<QUOTE>` incompatibility, with a CMake 3.30+ requirement and Manage Tools recovery action.
+- Verified the regenerated STM32C593RET6 / USBX project: 138-step build with CMake 4.3.2 and Arm GCC 13.3.1, followed by plugin preset/configure/build and ELF/MAP analysis. This is compile/static-analysis validation, not probe or runtime acceptance, and does not reproduce the earlier FreeRTOS linker failure.
+
+## 0.7.6 (local experimental build)
+
+- Keep actual compiler/linker diagnostics ahead of long Ninja link commands in build failure messages. Full output remains available in the build log.
+- Added regression coverage for C5-style long link commands, split output, undefined references, memory overflow and linker script errors. The reported STM32C593 link failure still requires its complete diagnostic or generated project to reproduce; this build does not claim a verified C5 firmware fix.
+
+## 0.7.5 (local experimental build)
+
+- Added firmware heap sampling choices: 1 / 2 / 5 / 10 Hz, with preview, conflict checks and rebuild for generated integrations. Flash the new image to activate the requested rate.
+- Show observed accepted-sample rate using firmware timestamps rather than TCP arrival bursts; task stack scanning remains at its existing 5-second period.
+
+## 0.7.4 (local experimental build)
+
+- Recognize markerless CMSIS-RTOS projects with a unique `MX_FREERTOS_Init` and existing task creation calls.
+- Insert the static monitor task after application tasks are created; retain conservative source-boundary and preview conflict checks.
+- Verified generated integration and ELF identity discovery by compiling a temporary copy of the THM_F4_Friction_RC project.
+
+## 0.7.3 (local experimental build)
+
+- Added full Chinese README and firmware integration guide with language links.
+- Added one-click monitor setup: verified ELF discovery, legacy ID prompt, previewed CubeMX HAL/FreeRTOS integration and build.
+- Resolve automatic RTT settings again before connecting; preserve unrelated features and reject stale or conflicting project edits.
+- Keep advanced JSON settings available; H7 buffer/cache placement and custom integration remain explicit.
+
 # 更新记录
+
+## 0.7.4 — 2026-11-07（本地实验构建）
+
+- 兼容没有 CubeMX RTOS_THREADS 用户标记的 CMSIS-RTOS 工程：确认唯一 `MX_FREERTOS_Init` 中已有任务创建后，在函数末尾接入静态监测任务。
+- 截图所示 THM_F4_Friction_RC 工程在临时副本上完成自动接入与 67 步构建；原工程未修改，未访问硬件。
+
+## 0.7.2 — 2026-11-06（本地实验构建）
+
+- 修复只能放大不能缩小：滚轮向下/减号先缩回 100%，继续缩小返回父级；HEX 保留减号退出，支持 Alt+← 返回。根层完全缩小时释放滚轮给页面。
+- 放大以指针位置为中心，支持触控板细粒度输入；层级切换后短暂抑制同向惯性，避免一次滚动跨过多层。
+- 增加连续缩放动画和进入/返回的淡入缩放过渡；移除每次缩放清空图表的处理，同层只更新图形尺寸。尊重系统减少动态效果设置。
+- 分区用量折叠为摘要，移除冗余工程文件层级；图表使用更大自适应空间，新增展开大视图/退出和 Escape 恢复。HEX 表内滚动并固定列头。
+- 补充双向滚轮、减号从 HEX 返回到总览、动画启动/结束、减少动态效果、大视图空间及恢复检查。
+
+## 0.7.1 — 2026-11-06（本地实验构建）
+
+- 重做内存树图：Flash 蓝色、RAM 青色，短文件名，横向面包屑、返回上级、区域图例与键盘列表。收紧布局，减少空白和密集嵌套。
+- 点击色块逐层进入文件和符号；在色块上持续滚轮放大可进入下一层，工具栏 + 默认聚焦当前层最大项目。
+- 符号末级进入 HEX：每行 16 字节、ASCII、VMA/LMA、256 字节分页、十六进制地址跳转和单字节 HEX/DEC/BIN。符号表新增直接 HEX 入口。
+- 字节来自校验过的当前 ELF；拒绝旧报告、错误段与变化中的产物。BSS/NOLOAD 明确提示无文件字节，不填充伪造值，也不自动访问芯片。
+- 新增 11 项字节/身份/范围回归，18 组内存 UI 覆盖 HEX、连续放大、实际鼠标操作、三主题、中英文和窄屏。真实 F4 样本 559 符号 / 665 页与 GNU 导出核对通过。未发布或自动安装。
+
+## 0.7.0 — 2026-11-06（本地实验构建）
+
+- 新增后台 ELF/MAP 内存分析：区域区间去重、LMA/VMA、NOLOAD/堆栈预留/空洞、符号归因、基线对比和 JSON/CSV/HTML 导出。
+- 新增四页内存工作台、本地 ECharts 6.1.0、分区联动与分页、中英和三主题适配。
+- 新增受管暂停快照与 RTT 监测、可选裸机/FreeRTOS C 组件、堆/任务栈/采样栈深、重启/丢包/固件不匹配提示。
+- 新增独立版本化 feature JSON、预算告警、SVD/FreeRTOS 设置、附加调试和故障辅助。
+- 新增串口终端、工程体检、PnP/驱动/目标分层诊断、CubeMX 变化提醒、构建摘要和团队诊断导出。
+- 更新测试、组件开销记录和支持矩阵。真实 F4 静态样本已核对；所有新增运行时硬件组合仍需实机验收。未发布此版本。
 
 ## 0.6.6 — 2026-11-04
 

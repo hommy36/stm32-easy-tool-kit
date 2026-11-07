@@ -37,5 +37,17 @@
   "setting.stm32Easy.clearBuildOutput.description": "Clear STM32 Build output before each configure, build or flash operation, keeping only the current job log.",
   "setting.stm32Easy.cubeMxPath.description": "Full path to STM32CubeMX.exe. If empty, search Program Files automatically; if not found, ask once and remember the selection.",
   "setting.stm32Easy.verification.strictHashing.description": "Reread input files to compute hashes before every flash/debug operation. By default, hashes are cached by file size and timestamp for faster unchanged builds.",
-  "command.stm32Easy.workbench.importClion": "STM32: Import CLion Configuration"
+  "command.stm32Easy.workbench.importClion": "STM32: Import CLion Configuration",
+  "command.stm32Easy.workbench.memory": "STM32: Memory studio",
+  "command.stm32Easy.workbench.analyzeMemory": "STM32: Refresh memory analysis",
+  "command.stm32Easy.workbench.runtime": "STM32: Connect & monitor",
+  "command.stm32Easy.workbench.snapshot": "STM32: Paused snapshot",
+  "command.stm32Easy.workbench.features": "STM32: Configure features",
+  "command.stm32Easy.workbench.diagnostics": "STM32: Diagnostics",
+  "command.stm32Easy.workbench.serial": "STM32: Serial terminal",
+  "command.stm32Easy.workbench.attach": "STM32: Attach debugger",
+  "command.stm32Easy.workbench.probeCheck": "STM32: Check probe connection",
+  "command.stm32Easy.workbench.artifacts": "STM32: Open artifacts",
+  "command.stm32Easy.workbench.debugControl": "STM32: Debug controls",
+  "command.stm32Easy.workbench.monitorSetup": "STM32: One-click monitor setup"
 }

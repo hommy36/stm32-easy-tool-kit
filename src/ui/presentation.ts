@@ -30,7 +30,9 @@ export function capabilities(input: {
   let flash: Availability = { enabled: true, reason: t("先编译，再烧录、校验并复位运行") };
   if (!build.enabled) flash = build;
   else if (!input.tools.some(tool => tool.id === 'openocd' && tool.available)) flash = blocked(t("请配置 OpenOCD"), 'tools');
-  else if (!input.settings?.targetScript) flash = blocked(t('请自动识别或选择芯片配置脚本'), 'dap');
+  else if (!input.settings?.targetScript) flash = /^STM32C5/i.test(input.settings?.chipLabel ?? '')
+    ? blocked(t('当前 OpenOCD 缺少 C5 配置；请在工具管理 → OpenOCD → 安装中选择“STM32C5 实验支持”。'), 'tools')
+    : blocked(t('请自动识别或选择芯片配置脚本'), 'dap');
   let debug: Availability = { enabled: true, reason: t("先编译，再启动原生调试") };
   if (!flash.enabled) debug = flash;
   else if (!input.cortex) debug = blocked(t("请安装 Cortex-Debug 1.12.1 或兼容的 1.x"), 'cortex');
@@ -39,6 +41,8 @@ export function capabilities(input: {
 }
 export function repairForError(message: string): Repair {
   if (/Cortex-Debug/.test(message)) return 'cortex';
+  if (/Arm/.test(message) && /编译器路径不一致|所选 Arm GCC|Arm compiler paths differ|selected Arm GCC/i.test(message)) return 'tools';
+  if (/CMake/.test(message) && /\$<QUOTE>/.test(message)) return 'tools';
   if (/页面已过期|另一窗口|版本|重新加载|stale|another window|revision|reload/i.test(message) && /设置|页面|工程|settings|page|project/i.test(message)) return 'reload';
   if (/芯片|target 脚本|芯片配置脚本|chip|target script/i.test(message)) return 'dap';
   if (/安装|工具链|工具环境|尚未配置|工具.*失效|缺少.*工具|install|toolchain|tool environment|tool.*(?:missing|unavailable)|missing.*tool/i.test(message)) return 'tools';

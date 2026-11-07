@@ -10,6 +10,8 @@ import { PresetChoice, PresetMetadata, ResolvedSelection, filterCmakeAvailable, 
 import { DependencyInputs, argumentValue, commandWords, linkerArguments, linkerScriptInputs, makeDependencies, ninjaDependencies, ninjaInputNames, readCompilations, readDependencyFile } from './dependencies';
 import { isWithin } from './artifacts';
 import { ClionProject, clionMetadata, readClionProject, readClionInstallations } from '../integration/clionConfig';
+import { BuildFailureSummary } from './failureSummary';
+import { optimizationConfigureArgs, verifyOptimization } from './optimization';
 
 export class BuildCancelled extends Error { constructor() { super(t("构建已取消")); } }
 export class ProcessTreeUncertain extends Error { constructor(message: string) { super(message); } }
@@ -131,8 +133,10 @@ export class BuildService {
     await this.checkCache(selection);
     const previous = await fileApiStamp(selection.binaryDirectory);
     await prepareFileApi(selection.binaryDirectory);
-    await this.execute(selection.sourceDirectory, [...(selection.configureArgs ?? ['--preset', selection.configurePreset]), '-DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON'], signal, false,
+    const optimizationArgs = await optimizationConfigureArgs(selection);
+    await this.execute(selection.sourceDirectory, [...(selection.configureArgs ?? ['--preset', selection.configurePreset]), '-DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON', ...optimizationArgs], signal, false,
       selection.configureArgs ? selection.configureEnvironment : this.environment);
+    await verifyOptimization(selection);
     const model = await readBuildModel(selection.binaryDirectory);
     if (model.indexToken === previous) throw new Error(t("CMake 未生成新的 File API 配置结果，拒绝使用旧目标"));
     await this.checkModel(model, selection);
@@ -142,6 +146,7 @@ export class BuildService {
     await this.validateSelection(selection);
     if (selection.cleanFirst || selection.packageOnly) throw new Error(t("此构建预设含清理/仅解析包操作，不能用于安全固件构建；请选择其他已有构建预设"));
     await this.checkCache(selection);
+    await verifyOptimization(selection);
     const before = await readBuildModel(selection.binaryDirectory);
     await this.checkModel(before, selection);
     if (!before.targets.some(item => item.id === target.id && item.configuration === target.configuration)) throw new Error(t("构建目标已变化，请重新配置/选择"));
@@ -151,6 +156,7 @@ export class BuildService {
     if (selection.buildArgs) args.push(...selection.buildArgs);
     if (before.cache.get('CMAKE_GENERATOR')?.startsWith('Ninja')) args.push('--', '-d', 'keepdepfile');
     await this.execute(selection.sourceDirectory, args, signal, false, selection.buildPreset ? this.environment : selection.configureEnvironment, selection.binaryDirectory);
+    await verifyOptimization(selection);
     const model = await readBuildModel(selection.binaryDirectory);
     await this.checkModel(model, selection);
     return model;
@@ -251,7 +257,11 @@ export class BuildService {
       if (!words.includes('-c')) continue;
       compilationCount++;
       const arm = this.tools.find(tool => tool.id === 'armGnu');
-      if (![arm?.executables.gcc, arm?.executables.gpp].some(file => file && words.some(word => path.isAbsolute(word) && path.resolve(word).toLowerCase() === path.resolve(file).toLowerCase()))) hardwareIssue = t("实际编译命令没有引用所选 Arm GCC/G++，不能确认其依赖；仅编译，不进入下载/调试。");
+      if (![arm?.executables.gcc, arm?.executables.gpp].some(file => file && words.some(word => path.isAbsolute(word) && path.resolve(word).toLowerCase() === path.resolve(file).toLowerCase()))) {
+        const actual = words.find(word => /(?:^|[\\/])arm-none-eabi-(?:gcc|g\+\+)(?:\.exe)?$/i.test(word)) ?? words[0] ?? t('(未设置)');
+        hardwareIssue = t('Arm 编译器路径不一致，暂停烧录/调试。\n实际命令：{0}\n当前选择：{1}\n请在“管理工具 → Arm GNU → 选择已有”选择实际编译器目录，再重新编译；不需要更换 OpenOCD。', actual,
+          [arm?.executables.gcc, arm?.executables.gpp].filter(Boolean).join(' / ') || t('(未设置)'));
+      }
       if (/\.s$/i.test(entry.file)) {
         try {
           const source = resolve(entry.file);
@@ -340,12 +350,12 @@ export class BuildService {
     this.guard();
     if (signal.aborted) throw new BuildCancelled();
     let stdout = '';
-    let tail = '';
+    const failure = new BuildFailureSummary();
     this.log('stdout', `\n[CMake] ${args.map(arg => JSON.stringify(arg)).join(' ')}\n`, diagnosticDirectory);
     const result = await this.runner({ executable: this.cmake, args, cwd, env, timeoutMs: capture ? 30000 : 600000, signal,
       onOutput: (stream, text) => {
         this.log(stream, text, diagnosticDirectory);
-        tail = (tail + text).slice(-8192);
+        failure.append(stream, text);
         if (capture && stream === 'stdout') {
           stdout += text;
           if (stdout.length > 2097152) throw new Error(t("CMake 配置列表超过大小限制"));
@@ -353,7 +363,7 @@ export class BuildService {
       } });
     if (!result.treeExited) throw new ProcessTreeUncertain(t("无法确认 CMake 作业进程树已退出，保留占用状态；请检查日志"));
     if (signal.aborted || result.reason === 'cancelled') throw new BuildCancelled();
-    if (result.reason !== 'exit' || result.exitCode !== 0) throw new Error(`CMake ${result.reason === 'timeout' ? t("超时") : t("执行失败")} (${result.exitCode ?? t("无退出码")}): ${result.error ?? tail}`);
+    if (result.reason !== 'exit' || result.exitCode !== 0) throw new Error(`CMake ${result.reason === 'timeout' ? t("超时") : t("执行失败")} (${result.exitCode ?? t("无退出码")}): ${result.error || failure.finish()}`);
     return stdout;
   }
 }

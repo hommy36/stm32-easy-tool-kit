@@ -37,5 +37,17 @@
   "setting.stm32Easy.clearBuildOutput.description": "每次开始新的配置、编译或下载前清空“STM32 构建”输出，只保留本次作业日志。",
   "setting.stm32Easy.cubeMxPath.description": "STM32CubeMX.exe 的完整路径。留空时自动查找 Program Files，找不到会让你选择一次并记住。",
   "setting.stm32Easy.verification.strictHashing.description": "下载/调试每次都重新读取输入文件计算哈希。默认按文件大小与时间戳复用缓存，无改动时更快。",
-  "command.stm32Easy.workbench.importClion": "STM32: 沿用 CLion 配置"
+  "command.stm32Easy.workbench.importClion": "STM32: 沿用 CLion 配置",
+  "command.stm32Easy.workbench.memory": "STM32: 内存分析",
+  "command.stm32Easy.workbench.analyzeMemory": "STM32: Refresh memory analysis",
+  "command.stm32Easy.workbench.runtime": "STM32: 连接并监测",
+  "command.stm32Easy.workbench.snapshot": "STM32: 暂停快照",
+  "command.stm32Easy.workbench.features": "STM32: 配置增强功能",
+  "command.stm32Easy.workbench.diagnostics": "STM32: 工程体检",
+  "command.stm32Easy.workbench.serial": "STM32: 串口终端",
+  "command.stm32Easy.workbench.attach": "STM32: 附加调试",
+  "command.stm32Easy.workbench.probeCheck": "STM32: 测试探针连接",
+  "command.stm32Easy.workbench.artifacts": "STM32: 打开产物目录",
+  "command.stm32Easy.workbench.debugControl": "STM32: Debug controls",
+  "command.stm32Easy.workbench.monitorSetup": "STM32: 一键配置监测"
 }

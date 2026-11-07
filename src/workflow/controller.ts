@@ -8,6 +8,8 @@ import { Lease, acquireOperationLock } from '../core/operationLock';
 import { BuildCancelled, BuildService, ProcessTreeUncertain } from '../build/service';
 import { BuildModel } from '../build/fileApi';
 import { PresetMetadata } from '../build/presets';
+import { optimizationLevel } from '../build/optimization';
+import { readFeatures, saveFeatures } from '../project/features';
 import { inputInventory } from '../build/inventory';
 import { BuildEvidence, InputScope, assertEvidenceCurrent, collectInputFiles, fingerprintInputs, fingerprintTools, inspectArmElf, isWithin } from '../build/artifacts';
 import { DebugProbe, ProjectSettings, SavedProject, debugProbes, defaultProjectSettings, probeLabel, probeOf, projectKeyUri, validateProjectSettings } from '../project/types';
@@ -45,7 +47,39 @@ export class WorkflowController {
     initialProjectUri?: string) { this.activeUri = initialProjectUri; }
 
   getSnapshot(): WorkflowSnapshot { return { ...this.snapshot }; }
+  async connectOwned(start: (settings: ProjectSettings, tools: ToolInstallation[], signal: AbortSignal, id: string) => Promise<OwnedDebugSession>): Promise<void> {
+    this.assertEditable(); this.host.guard();
+    const uri = await this.ensureProjectUri(); this.assertEditable();
+    const abort = new AbortController(), id = randomUUID(); this.abort = abort;
+    const leases: Lease[] = [];
+    const task = (async () => {
+      try {
+        const project = await this.project(uri);
+        leases.push(await acquireOperationLock(this.lockDirectory, `hardware:${probeOf(project.settings)}`));
+        this.host.guard(); abort.signal.throwIfAborted();
+        const session = await start(project.settings, await this.toolSource.list(), abort.signal, id);
+        if (abort.signal.aborted) { await session.stop(); throw new BuildCancelled(); }
+        let active: ActiveDebug;
+        const cleanup = session.finished.then(() => this.finishDebug(active), error => this.finishDebug(active, error));
+        active = { id, session, leases, stopped: false, cleanup }; this.activeDebug = active;
+        this.publish('debugging', 'Connected to existing firmware. No build or download performed.');
+        void cleanup.catch(error => { this.publish('uncertain', errorText(error)); });
+      } catch (error) {
+        if (error instanceof ProcessTreeUncertain) this.publish('uncertain', error.message);
+        else { for (const lease of leases.reverse()) await lease.release(); this.publish(abort.signal.aborted ? 'cancelled' : 'failed', errorText(error)); }
+        throw error;
+      }
+    })();
+    this.running = task; this.publish('debug-starting', 'Connecting to existing firmware.', { operationId: id, projectUri: uri });
+    try { await task; } finally { if (this.running === task) this.running = undefined; if (!this.activeDebug) this.abort = undefined; this.publish(this.snapshot.phase, this.snapshot.message); }
+  }
   refreshProjectSettings(): void { this.publish(this.snapshot.phase, this.snapshot.message); }
+  async editFeatureFiles<T>(operation: () => Promise<T>): Promise<T> {
+    this.assertEditable(); this.host.guard(); this.editing = true;
+    this.publish(this.snapshot.phase, this.snapshot.message);
+    try { return await operation(); }
+    finally { this.editing = false; this.publish(this.snapshot.phase, this.snapshot.message); }
+  }
   get isWorkflowBusy(): boolean { return this.editing || !!this.running || !!this.activeDebug || this.snapshot.phase === 'uncertain'; }
   get isBusy(): boolean { return !!this.toolSource.isBusy || this.isWorkflowBusy; }
   private publish(phase: Phase, message: string, extra: Partial<WorkflowSnapshot> = {}): void {
@@ -120,7 +154,9 @@ export class WorkflowController {
     const scripts = (await this.toolSource.list()).find(tool => tool.id === 'openocd')?.scriptsDirectory;
     if (!scripts) return settings;
     const candidates = await detectChipTargets(settings.sourceDirectory, scripts);
-    return candidates.length === 1 && candidates[0].available ? { ...settings, chipLabel: candidates[0].label, targetScript: candidates[0].targetScript, scriptKind: undefined, chipConfirmed: false } : settings;
+    if (candidates.length !== 1) return settings;
+    return candidates[0].available ? { ...settings, chipLabel: candidates[0].label, targetScript: candidates[0].targetScript, scriptKind: undefined, chipConfirmed: false }
+      : { ...settings, chipLabel: candidates[0].label };
   }
   async saveSettings(value: ProjectSettings, expectedRevision: number): Promise<SavedProject> {
     this.assertEditable();
@@ -215,6 +251,17 @@ export class WorkflowController {
       });
     } catch (error) { const failure = abort.signal.aborted ? new BuildCancelled() : error; this.publish(abort.signal.aborted ? 'cancelled' : 'failed', errorText(failure)); throw failure; }
     finally { if (this.abort === abort) this.abort = undefined; this.editing = false; this.publish(this.snapshot.phase, this.snapshot.message); }
+  }
+  async selectOptimization(value: string, expectedRevision: string): Promise<void> {
+    const level = optimizationLevel(value);
+    await this.editFeatureFiles(async () => {
+      const project = await this.activeProject();
+      if (!project) throw new Error(t("请先选择构建方案"));
+      const { settings } = await readFeatures(project.settings.sourceDirectory);
+      await saveFeatures(project.settings.sourceDirectory, { ...settings, build: { ...settings.build, optimization: level } }, expectedRevision);
+      this.configured.delete(project.settings.projectUri);
+      this.publish('idle', t('优化等级已设为 {0}，下次编译时生效', level === 'default' ? t('默认（跟随构建方案）') : `-${level}`), { evidence: undefined });
+    });
   }
   async selectConfigurePreset(selectedName?: string): Promise<void> {
     const uri = await this.ensureProjectUri();
@@ -321,13 +368,19 @@ export class WorkflowController {
           targetId: saved.settings.configurePreset === configureName ? saved.settings.targetId : undefined,
           configuration: saved.settings.configurePreset === configureName ? saved.settings.configuration : undefined }, saved.revision);
       }
-      const selection = metadata.resolve(configureName, buildName);
+      const selection = { ...metadata.resolve(configureName, buildName) };
+      const features = await readFeatures(selection.sourceDirectory);
+      selection.optimization = features.settings.build?.optimization ?? 'default';
+      selection.inputFiles = [...selection.inputFiles];
+      const featuresFile = path.join(selection.sourceDirectory, '.vscode', 'stm32-easy.features.json');
+      try { await fs.access(featuresFile); selection.inputFiles.push(featuresFile); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
       gate();
       const binary = path.resolve(selection.binaryDirectory);
       if (!isWithin(saved.settings.sourceDirectory, binary) && !await this.approve(uri, binary, t("构建输出目录"))) throw new BuildCancelled();
       leases.push(await acquireOperationLock(this.lockDirectory, `build:${await this.canonicalDirectory(binary)}`));
       const signature = JSON.stringify([selection.sourceDirectory, selection.configurePreset, selection.buildPreset, selection.binaryDirectory,
-        selection.configureArgs, selection.buildArgs, selection.configureArgs ? selection.configureEnvironment : undefined, toolFingerprint]);
+        selection.configureArgs, selection.buildArgs, selection.configureArgs ? selection.configureEnvironment : undefined, toolFingerprint, selection.optimization, features.revision]);
       let cached = this.configured.get(uri);
       let fresh = action === 'configure' || !cached || cached.signature !== signature;
       if (!fresh && cached) {
@@ -344,6 +397,7 @@ export class WorkflowController {
         this.configured.set(uri, cached);
       }
       if (!cached) throw new Error(t("没有可用的配置结果"));
+      if ((await readFeatures(selection.sourceDirectory)).revision !== features.revision) throw new Error(t("工程配置已变化，请重新构建"));
       if (action === 'configure') {
         const targets = cached.model.targets.filter(item => !selection.configuration || item.configuration === selection.configuration);
         const preferred = targets.filter(target => target.name === saved.settings.preferredTarget);

@@ -9,6 +9,7 @@ import { runProcess } from '../core/process';
 import { BuildCancelled } from '../build/service';
 import { BuildEvidence, isWithin } from '../build/artifacts';
 import { ProjectSettings, probeOf, validateProjectSettings } from '../project/types';
+import { isC5Target, verifyC5Files, c5CheckCommands, c5EventScopeCommand } from './c5';
 
 export type DapDialect = 'modern' | 'legacy';
 export interface DapRuntime {
@@ -84,6 +85,7 @@ export function buildConfigArgs(raw: ProjectSettings, scriptsDirectory: string, 
   for (const command of driverCommands(settings, dialect)) args.push('-c', command);
   for (const command of serialCommands(settings, dialect)) args.push('-c', command);
   args.push('-c', transportCommand(settings, dialect), '-c', `source ${tclWord(target)}`, '-c', `adapter speed ${settings.speedKHz}`);
+  if (isC5Target(settings)) args.push('-c', c5EventScopeCommand);
   return args;
 }
 export function buildFlashArgs(settings: ProjectSettings, scriptsDirectory: string, artifact: string, dialect: DapDialect = 'legacy'): string[] {
@@ -107,6 +109,8 @@ export async function resolveDapConfiguration(raw: ProjectSettings, signal: Abor
   const executable = tool?.executables.openocd;
   if (!tool?.scriptsDirectory || !executable || !path.isAbsolute(executable)) throw new Error(t("请先选择完整的 OpenOCD（包含 scripts）"));
   const scriptsDirectory = await fs.realpath(tool.scriptsDirectory);
+  const c5 = isC5Target(settings);
+  if (c5) await verifyC5Files(scriptsDirectory, targetPath(settings, scriptsDirectory));
   const targetScript = await fs.realpath(targetPath(settings, scriptsDirectory));
   if (!isWithin(scriptsDirectory, targetScript) && !await runtime.trustScript(targetScript)) throw new BuildCancelled();
   const targetSha256 = await scriptFingerprint(targetScript);
@@ -131,6 +135,14 @@ export async function resolveDapConfiguration(raw: ProjectSettings, signal: Abor
     if (result.exitCode === 0 && !result.timedOut) { dialect = candidate; break; }
   }
   if (!dialect) throw new Error(t("当前 OpenOCD 不支持所选探针或 SWD 参数，请检查版本和后端能力"));
+  if (c5) {
+    const result = await probe({ executable, args: [...buildConfigArgs({ ...settings, targetScript }, scriptsDirectory, dialect),
+      ...c5CheckCommands.flatMap(command => ['-c', command])], timeoutMs: 10000, signal });
+    if (result.cancelled || signal.aborted) throw new BuildCancelled();
+    if (result.exitCode !== 0 || result.timedOut || !`${result.stdout}\n${result.stderr}`.includes('STM32_EASY_C5_READY')) {
+      throw new Error(t('STM32C5 驱动配置检查失败；需要含 stldr 的 OpenOCD 和直接 DAP 连接，旧 HLA 不支持。{0}', (result.stderr || result.stdout).slice(-1500)));
+    }
+  }
   runtime.guard();
   if (signal.aborted) throw new BuildCancelled();
   return { executable, scriptsDirectory, targetScript, targetSha256, dialect };

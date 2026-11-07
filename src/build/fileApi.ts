@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 export interface FirmwareTarget {
   id: string; name: string; configuration: string;
-  artifacts: string[]; sourceFiles: string[]; includeDirectories: string[];
+  artifacts: string[]; sourceFiles: string[]; includeDirectories: string[]; linkFragments?: string[];
 }
 export interface BuildModel {
   sourceDirectory: string; binaryDirectory: string;
@@ -97,6 +97,7 @@ export async function readBuildModel(binaryDirectory: string): Promise<BuildMode
       if (target.type !== 'EXECUTABLE') continue;
       if (target.id !== reference.id || target.name !== reference.name) throw new Error(t("CMake File API 目标引用身份不匹配"));
       targets.push({ id: text(target.id), name: text(target.name), configuration: configurationName,
+        linkFragments: target.link ? array(object(target.link).commandFragments ?? []).map(raw => text(object(raw).fragment)) : [],
         artifacts: target.artifacts === undefined ? [] : array(target.artifacts, 256).map(raw => path.resolve(actualBinary, text(object(raw).path))),
         sourceFiles: target.sources === undefined ? [] : array(target.sources).flatMap(raw => {
           const source = object(raw);

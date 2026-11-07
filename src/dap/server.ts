@@ -7,14 +7,19 @@ import { mergeToolPath, toolBinDirectories } from '../core/paths';
 import { BuildCancelled, ProcessTreeUncertain } from '../build/service';
 import { ProjectSettings } from '../project/types';
 import { DapConfiguration, DapRuntime, buildConfigArgs, portCommand, resolveDapConfiguration, scriptFingerprint } from './config';
+import { isC5Target, verifyC5Files } from './c5';
 
 export interface OwnedGdbServer {
   host: '127.0.0.1'; port: number;
+  rtt?: { port: number; controlPort: number; command(command: string): Promise<string> };
   finished: Promise<void>;
   stop(): Promise<void>;
 }
 export interface ServerRuntime extends DapRuntime {
   beforeStart(): Promise<void>;
+  mode?: 'launch' | 'attach';
+  rtos?: 'FreeRTOS';
+  rtt?: { address: number; searchBytes: number; channel: number };
   ownerCheck?: (port: number, pid: number) => Promise<boolean>;
 }
 class PortOwnerMismatch extends Error { }
@@ -44,12 +49,13 @@ async function freePort(): Promise<number> {
     });
   });
 }
-export function buildServerArgs(settings: ProjectSettings, configuration: DapConfiguration, port: number): string[] {
+export function buildServerArgs(settings: ProjectSettings, configuration: DapConfiguration, port: number, options?: { mode?: 'launch' | 'attach'; rtos?: 'FreeRTOS'; controlPort?: number }): string[] {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(t("GDB 端口无效"));
   return [...buildConfigArgs({ ...settings, targetScript: configuration.targetScript }, configuration.scriptsDirectory, configuration.dialect),
     '-c', 'bindto 127.0.0.1', '-c', portCommand(configuration.dialect, 'gdb', port),
-    '-c', portCommand(configuration.dialect, 'tcl', 'disabled'), '-c', portCommand(configuration.dialect, 'telnet', 'disabled'),
-    '-c', 'init', '-c', 'halt'];
+    '-c', portCommand(configuration.dialect, 'tcl', options?.controlPort ?? 'disabled'), '-c', portCommand(configuration.dialect, 'telnet', 'disabled'),
+    ...(options?.rtos ? ['-c', '[target current] configure -rtos FreeRTOS'] : []),
+    '-c', 'init', ...(options?.mode === 'attach' ? [] : ['-c', 'halt'])];
 }
 
 export async function startGdbServer(settings: ProjectSettings, signal: AbortSignal, runtime: ServerRuntime): Promise<OwnedGdbServer> {
@@ -68,6 +74,7 @@ async function startOnce(settings: ProjectSettings, configuration: DapConfigurat
   if (await scriptFingerprint(configuration.targetScript) !== configuration.targetSha256) throw new Error(t("目标脚本已变化，请重新确认"));
   await runtime.beforeStart();
   if (await scriptFingerprint(configuration.targetScript) !== configuration.targetSha256) throw new Error(t("目标脚本已变化，请重新确认"));
+  if (isC5Target(settings)) await verifyC5Files(configuration.scriptsDirectory, configuration.targetScript);
   runtime.guard();
   if (signal.aborted) throw new BuildCancelled();
   const controller = new AbortController();
@@ -75,6 +82,10 @@ async function startOnce(settings: ProjectSettings, configuration: DapConfigurat
   let ended = false;
   let pid = 0;
   let tail = '';
+  let controlPort = runtime.rtt ? await freePort() : undefined;
+  while (controlPort === port) controlPort = await freePort();
+  let rttPort = runtime.rtt ? await freePort() : undefined;
+  while (rttPort !== undefined && (rttPort === controlPort || rttPort === port)) rttPort = await freePort();
   let readyResolve!: () => void;
   let startedResolve!: () => void;
   const ready = new Promise<void>(resolve => { readyResolve = resolve; });
@@ -82,7 +93,7 @@ async function startOnce(settings: ProjectSettings, configuration: DapConfigurat
   const abort = () => { stopRequested = true; controller.abort(); };
   signal.addEventListener('abort', abort, { once: true });
   if (signal.aborted) abort();
-  const job = (runtime.runner ?? runJob)({ executable: configuration.executable, args: buildServerArgs(settings, configuration, port),
+  const job = (runtime.runner ?? runJob)({ executable: configuration.executable, args: buildServerArgs(settings, configuration, port, { mode: runtime.mode, rtos: runtime.rtos, controlPort }),
     cwd: settings.sourceDirectory, env: mergeToolPath(process.env, toolBinDirectories(runtime.tools)),
     timeoutMs: 86400000, signal: controller.signal,
     onStarted: value => { pid = value; startedResolve(); },
@@ -118,9 +129,37 @@ async function startOnce(settings: ProjectSettings, configuration: DapConfigurat
     runtime.guard();
     if (signal.aborted) throw new BuildCancelled();
     if (ended) throw new Error(t("OpenOCD 在端口核验期间已退出"));
-    return { host: '127.0.0.1', port, finished, stop };
+    let rtt: OwnedGdbServer['rtt'];
+    if (runtime.rtt && controlPort && rttPort) {
+      if (!await (runtime.ownerCheck ?? verifyLoopbackOwner)(controlPort, pid)) throw new Error('RTT control port ownership mismatch.');
+      const command = async (text: string) => {
+        const response = await tclCommand(controlPort!, `set __stme_code [catch {${text}} __stme_result]; format "%d\n%s" $__stme_code $__stme_result`, signal);
+        const first = response.indexOf('\n');
+        if (first < 0 || response.slice(0,first).trim() !== '0') throw new Error(`OpenOCD RTT command failed: ${response}`);
+        return response.slice(first+1);
+      };
+      await command(`rtt setup 0x${runtime.rtt.address.toString(16)} ${runtime.rtt.searchBytes} {SEGGER RTT}`);
+      await command('rtt polling_interval 100');
+      await command(`rtt server start ${rttPort} ${runtime.rtt.channel}`);
+      if (!await (runtime.ownerCheck ?? verifyLoopbackOwner)(rttPort, pid)) throw new Error('RTT data port ownership mismatch.');
+      rtt = { port: rttPort, controlPort, command };
+    }
+    return { host: '127.0.0.1', port, finished, stop, rtt };
   } catch (error) {
     await stop();
     throw error;
   } finally { if (timer) clearTimeout(timer); }
+}
+export function tclCommand(port: number, command: string, signal: AbortSignal): Promise<string> {
+  return new Promise((resolve,reject) => {
+    signal.throwIfAborted();
+    if (!Number.isInteger(port) || port < 1 || port > 65535 || command.includes(String.fromCharCode(26))) { reject(new Error('Invalid Tcl request.')); return; }
+    const socket = net.createConnection({ host: '127.0.0.1', port }); let response = ''; let settled = false;
+    const finish = (error?: Error) => { if (settled) return; settled = true; signal.removeEventListener('abort', abort); socket.destroy(); if (error) reject(error); else resolve(response.replace(/\x1a[\s\S]*$/, '')); };
+    const abort = () => finish(new Error('RTT request cancelled.')); signal.addEventListener('abort', abort, { once: true });
+    socket.setTimeout(5000, () => finish(new Error('RTT control timed out.')));
+    socket.on('connect', () => socket.write(command + String.fromCharCode(26)));
+    socket.on('data', chunk => { response += chunk.toString('utf8'); if (response.length > 65536) finish(new Error('RTT response too large.')); else if (response.includes(String.fromCharCode(26))) finish(); });
+    socket.on('error', finish); socket.on('end', () => { if (!settled) finish(new Error('Incomplete RTT control response.')); });
+  });
 }

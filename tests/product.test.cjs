@@ -1,4 +1,6 @@
 require('../out/i18n').setLanguage('zh-CN');
+
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -85,6 +87,15 @@ async function fixture() {
   const controller=new WorkflowController(store,state,host,{flash:async()=>{flash++;},debug:async()=>{throw Error('not used');}},path.join(root,'locks'),()=>backend);
   return {root,source,uri,store,state,controller,backend,model,target,host,main,setProjects:p=>{projects=p;},get remembered(){return remembered;},get flash(){return flash;},get configured(){return configured;}};
 }
+test('monitor file edits block build and project switching and release the lock on failure', async()=>{
+  const f=await fixture();let finish;const blocked=new Promise(resolve=>finish=resolve);
+  const pending=f.controller.editFeatureFiles(async()=>{await blocked;throw Error('preview conflict');});
+  assert.equal(f.controller.isBusy,true);
+  await assert.rejects(f.controller.run('build',f.uri));
+  await assert.rejects(f.controller.selectProject(f.uri));
+  const rejected=assert.rejects(pending,/preview conflict/);finish();await rejected;
+  assert.equal(f.controller.isBusy,false);
+});
 test('CLion import locks tools and build, and cancellation preserves all settings', async()=>{
   const f=await fixture();const saved=(await f.controller.view()).project;
   const oldTools=await f.state.list();let started;const ready=new Promise(resolve=>{started=resolve;});
@@ -237,4 +248,38 @@ test('configuration without a Build Preset remains visible but a genuinely chang
  assert.equal(view.model.targets[0].id,f.target.id);
  await f.controller.saveSettings({...view.project.settings,configurePreset:'Release'},view.project.revision);
  assert.equal((await f.controller.view()).model,undefined);
+});
+test('connect-only lifecycle holds hardware lock and leaves build artifacts untouched',async()=>{const f=await fixture();await f.controller.run('build',f.uri);const evidence=f.controller.getSnapshot().evidence;let finish,stops=0;await f.controller.connectOwned(async()=>({finished:new Promise(resolve=>finish=resolve),stop:async()=>{stops++;finish();}}));assert.equal(f.controller.getSnapshot().phase,'debugging');assert.equal(f.controller.getSnapshot().evidence,evidence);assert.ok(f.controller.isBusy);await assert.rejects(()=>f.controller.run('build',f.uri));await f.controller.stop();assert.equal(stops,1);assert.equal(f.controller.isBusy,false);assert.equal(f.flash,0);});
+test('connect-only lock acquisition failure restores idle eligibility',async()=>{const f=await fixture();const {acquireOperationLock}=require('../out/core/operationLock');const lease=await acquireOperationLock(path.join(f.root,'locks'),'hardware:cmsis-dap');try{await assert.rejects(()=>f.controller.connectOwned(async()=>{throw Error('must not start');}));assert.equal(f.controller.getSnapshot().phase,'failed');assert.equal(f.controller.isBusy,false);}finally{await lease.release();}});
+
+
+test('optimization selection invalidates evidence, persists, follows presets and restores default', async()=>{
+ const {readFeatures}=require('../out/project/features');
+ const f=await fixture();await f.controller.run('build',f.uri);
+ let seen=[];const configure=f.backend.configure;f.backend.configure=async(selection,...args)=>{seen.push(selection.optimization);return configure(selection,...args);};
+ const features=await readFeatures(f.source);
+ await f.controller.selectOptimization('O2',features.revision);
+ assert.equal(f.controller.getSnapshot().evidence,undefined);
+ assert.equal((await f.controller.view()).model,undefined);
+ assert.equal((await readFeatures(f.source)).settings.build.optimization,'O2');
+ await assert.rejects(f.controller.selectOptimization('Os',features.revision),/changed/);
+ await f.controller.run('build',f.uri);assert.deepEqual(seen,['O2']);
+ await f.controller.run('build',f.uri);assert.deepEqual(seen,['O2']);
+ await f.controller.selectConfigurePreset('Release');await f.controller.run('build',f.uri);assert.deepEqual(seen,['O2','O2']);
+ await f.controller.selectOptimization('default',(await readFeatures(f.source)).revision);
+ await f.controller.run('build',f.uri);assert.deepEqual(seen,['O2','O2','default']);
+});
+
+test('optimization settings changed during configuration or build cannot authorize old firmware', async()=>{
+ const {readFeatures,saveFeatures}=require('../out/project/features');
+ const f=await fixture();const initial=await readFeatures(f.source);
+ await f.controller.selectOptimization('O2',initial.revision);
+ const change=async()=>{const v=await readFeatures(f.source);await saveFeatures(f.source,{...v.settings,build:{optimization:v.settings.build.optimization==='O2'?'Os':'O2'}},v.revision);};
+ const configure=f.backend.configure;
+ f.backend.configure=async(...args)=>{await change();return configure(...args);};
+ await assert.rejects(f.controller.run('build',f.uri),/变化/);
+ f.backend.configure=configure;
+ await f.controller.run('build',f.uri);
+ f.backend.build=async()=>{await change();return f.model;};
+ await assert.rejects(f.controller.run('flash',f.uri),/变化/);assert.equal(f.flash,0);
 });

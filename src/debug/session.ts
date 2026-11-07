@@ -58,6 +58,11 @@ function record(value: unknown): Record<string, unknown> | undefined {
 }
 
 export class DebugSessionOwner {
+  onPaused?: () => void;
+  onContinued?: () => void;
+  private paused = false;
+  get ownedSession(): vscode.DebugSession | undefined { return this.session; }
+  get isPaused(): boolean { return this.paused && !this.ended; }
   readonly finished: Promise<void>;
   private readonly completion = deferred<void>();
   private readonly launched = deferred<void>();
@@ -103,13 +108,14 @@ export class DebugSessionOwner {
           return {
             onDidSendMessage: (raw: unknown) => {
               const message = record(raw);
-              if (message?.type === 'response' && message.command === 'launch') {
+              if (message?.type === 'response' && message.command === configuration.request) {
                 if (message.success === true) { this.log(t("调试启动请求已成功；停止位置以原生调试视图为准。\n")); this.launched.resolve(); }
                 else fail(new Error(t("调试启动失败: {0}", typeof message.message === 'string' ? message.message : t("DAP launch 被拒绝"))));
               } else if (message?.type === 'event' && message.event === 'stopped') {
+                this.paused = true; this.onPaused?.();
                 const body = record(message.body);
                 this.log(t("目标已暂停 ({0})，未推断为 main。\n", typeof body?.reason === 'string' ? body.reason : t("原因见调试视图")));
-              }
+              } else if (message?.type === 'event' && message.event === 'continued') { this.paused = false; this.onContinued?.(); }
             },
             onError: error => fail(error),
             onExit: () => { if (!this.ended) fail(new Error(t("调试适配器已退出"))); }

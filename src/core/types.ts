@@ -16,6 +16,7 @@ export interface ToolInstallation {
 }
 
 export interface ToolRelease {
+  archiveFormat?: 'zip' | 'tar.gz';
   id: ToolId;
   version: string;
   platform: 'win32-x64';

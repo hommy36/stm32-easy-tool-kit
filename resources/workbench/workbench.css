@@ -82,3 +82,7 @@ dt { color: var(--vscode-descriptionForeground); } dd { margin: 0; overflow-wrap
 .field-error { color: var(--vscode-errorForeground); margin: 4px 0; }
 @media (max-width: 640px) { .page { padding: 18px 14px; } .page-layout { grid-template-columns: minmax(0,1fr); gap: 18px; } nav { flex-direction: row; flex-wrap: wrap; } .inline { flex-wrap: wrap; } .inline input { flex-basis: 100%; } .page-footer .actions { width: 100%; } dl { grid-template-columns: minmax(0,1fr); gap: 3px; } dd { margin-bottom: 8px; } }
 @media (pointer: coarse) { button, select, input:not([type=checkbox]) { min-height: 44px; } }
+
+.build-choice { display: grid; grid-template-columns: minmax(0, 1fr) 76px; gap: 8px; align-items: end; }
+.build-choice > div { min-width: 0; }
+.build-choice select { min-width: 0; text-overflow: ellipsis; }

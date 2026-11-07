@@ -2,7 +2,7 @@
   "name": "stm32-easy-tool-kit",
   "displayName": "STM32 Easy Tool Kit",
   "description": "%description%",
-  "version": "0.6.6",
+  "version": "0.7.12",
   "publisher": "hommy36",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -48,21 +48,25 @@
   },
   "scripts": {
     "check": "tsc --noEmit",
-    "compile": "tsc -p .",
+    "compile": "tsc -p . && node scripts/bundle-assets.cjs",
     "vscode:prepublish": "npm run compile",
     "package": "vsce package --no-rewrite-relative-links",
     "test": "npm run compile && node --test tests/*.test.cjs",
-    "test:ui": "npm run compile && node scripts/webview-smoke.cjs"
+    "test:ui": "npm run compile && node scripts/webview-smoke.cjs",
+    "test:memory-ui": "npm run compile && node scripts/memory-ui-smoke.cjs"
   },
   "dependencies": {
+    "echarts": "6.1.0",
     "https-proxy-agent": "7.0.6",
+    "tar-stream": "^3.2.0",
     "yauzl": "3.4.0"
   },
   "devDependencies": {
     "@types/node": "20.19.9",
+    "@types/tar-stream": "^3.1.4",
     "@types/vscode": "1.96.0",
     "@types/yauzl": "2.10.3",
-    "@vscode/vsce": "3.6.2",
+    "@vscode/vsce": "4.1.0",
     "typescript": "5.9.3"
   },
   "contributes": {
@@ -202,6 +206,55 @@
         "command": "stm32Easy.workbench.importClion",
         "title": "%command.stm32Easy.workbench.importClion%",
         "enablement": "!stm32Easy.workbenchBusy"
+      },
+      {
+        "command": "stm32Easy.workbench.memory",
+        "title": "%command.stm32Easy.workbench.memory%"
+      },
+      {
+        "command": "stm32Easy.workbench.analyzeMemory",
+        "title": "%command.stm32Easy.workbench.analyzeMemory%"
+      },
+      {
+        "command": "stm32Easy.workbench.runtime",
+        "title": "%command.stm32Easy.workbench.runtime%"
+      },
+      {
+        "command": "stm32Easy.workbench.snapshot",
+        "title": "%command.stm32Easy.workbench.snapshot%"
+      },
+      {
+        "command": "stm32Easy.workbench.features",
+        "title": "%command.stm32Easy.workbench.features%"
+      },
+      {
+        "command": "stm32Easy.workbench.diagnostics",
+        "title": "%command.stm32Easy.workbench.diagnostics%"
+      },
+      {
+        "command": "stm32Easy.workbench.serial",
+        "title": "%command.stm32Easy.workbench.serial%"
+      },
+      {
+        "command": "stm32Easy.workbench.attach",
+        "title": "%command.stm32Easy.workbench.attach%"
+      },
+      {
+        "command": "stm32Easy.workbench.probeCheck",
+        "title": "%command.stm32Easy.workbench.probeCheck%"
+      },
+      {
+        "command": "stm32Easy.workbench.artifacts",
+        "title": "%command.stm32Easy.workbench.artifacts%"
+      },
+      {
+        "command": "stm32Easy.workbench.debugControl",
+        "title": "%command.stm32Easy.workbench.debugControl%"
+      },
+      {
+        "command": "stm32Easy.workbench.monitorSetup",
+        "title": "%command.stm32Easy.workbench.monitorSetup%",
+        "enablement": "!stm32Easy.workbenchBusy"
       }
     ],
     "viewsContainers": {
@@ -315,6 +368,12 @@
           "description": "%setting.stm32Easy.verification.strictHashing.description%"
         }
       }
-    }
+    },
+    "jsonValidation": [
+      {
+        "fileMatch": "**/.vscode/stm32-easy.features.json",
+        "url": "./resources/stm32-easy.features.schema.json"
+      }
+    ]
   }
 }

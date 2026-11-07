@@ -180,6 +180,18 @@ async function main(){
       assert.equal(await evaluate("document.querySelector('.console-heading strong').textContent"),'motor-control');
       assert.equal(await evaluate("document.getElementById('build').textContent"),t('编译'));
       if(locale==='en')assert.equal(await evaluate('/[\\u3400-\\u9fff]/.test(document.body.innerText)'),false,'English console must not contain Chinese UI text');
+      await send({...base,optimization:{level:'default',revision:'a'.repeat(64)}});
+      assert.equal(await evaluate("document.getElementById('optimization').value"),'default');
+      await evaluate("document.getElementById('optimization').value='Os';document.getElementById('optimization').dispatchEvent(new Event('change'))");
+      const optMessage=await evaluate('sent.at(-1)');assert.equal(optMessage.action,'optimization');assert.equal(optMessage.value,'Os');assert.equal(optMessage.featureRevision,'a'.repeat(64));
+      assert.equal(await evaluate("document.getElementById('optimization').disabled"),true);
+      await send({type:'complete'});await send({...base,optimization:{level:'Os',revision:'b'.repeat(64)}});
+      assert.equal(await evaluate("document.getElementById('optimizationHint').hidden"),false);
+      const layout=await evaluate("({preset:document.getElementById('preset').getBoundingClientRect().toJSON(),opt:document.getElementById('optimization').getBoundingClientRect().toJSON()})");
+      assert.equal(layout.preset.y,layout.opt.y);assert.ok(layout.opt.x>=layout.preset.right+7);assert.ok(layout.opt.right<=320);
+      await evaluate("document.getElementById('optimization').focus()");assert.equal(await evaluate('document.activeElement.id'),'optimization');
+      await send({...base,busy:true,optimization:{level:'Os',revision:'b'.repeat(64)}});assert.equal(await evaluate("document.getElementById('optimization').disabled"),true);
+      await send({...base,optimization:{level:'Os',revision:'b'.repeat(64)}});
       const shot=await cdp('Page.captureScreenshot',{format:'png'});await fs.writeFile(path.join(root,`console-${locale}-${theme}-320.png`),Buffer.from(shot.data,'base64'));
       await send({...base,project:undefined,projects:[],snapshot:{revision:1,phase:'idle',message:t('请选择已有 STM32 CMake 工程')}});
       assert.equal(await evaluate("document.querySelectorAll('#capabilities .readiness').length"),3,'empty workspace renders all readiness rows without a flash history');

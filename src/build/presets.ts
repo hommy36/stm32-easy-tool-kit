@@ -19,6 +19,7 @@ export interface ResolvedSelection {
   /** Internal CLion profile invocation; never written into the user's Presets. */
   configureArgs?: string[];
   buildArgs?: string[];
+  optimization?: import('./optimization').OptimizationLevel;
 }
 export interface PresetMetadata {
   configure: PresetChoice[];

@@ -6,6 +6,7 @@ import { ToolInstallation, ToolRelease } from '../core/types';
 import { resolveArchiveEntry } from '../core/paths';
 import { downloadRelease, snapshotArchive } from './download';
 import { extractArchive } from './extract';
+import { extractTarArchive } from './extractTar';
 import { checkInstallation } from './check';
 
 export interface InstallOptions {
@@ -49,7 +50,8 @@ export async function installRelease(release: ToolRelease, destination: string, 
     signal.throwIfAborted();
     await fs.mkdir(staging);
     report(t("安全解压"));
-    await extractArchive(archive, staging, release, signal);
+    if (release.archiveFormat === 'tar.gz') await extractTarArchive(archive, staging, release, signal);
+    else await extractArchive(archive, staging, release, signal);
     const buildTool = (root: string): ToolInstallation => ({
       id: release.id, version: release.version, source: 'managed', root,
       executables: Object.fromEntries(Object.entries(release.executables).map(([key, relative]) => [key, resolveArchiveEntry(root, relative)])),

@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { runProcess } from '../core/process';
 import { CheckResult, ToolInstallation, errorText } from '../core/types';
 import { probeLabel } from '../project/types';
+import { c5CheckCommands, verifyC5Files, c5EventScopeCommand } from '../dap/c5';
 
 export async function checkInstallation(tool: ToolInstallation, signal?: AbortSignal): Promise<CheckResult[]> {
   signal?.throwIfAborted();
@@ -28,6 +29,19 @@ export async function checkInstallation(tool: ToolInstallation, signal?: AbortSi
     checks.push({ code: 'target', status: result.exitCode === 0 && result.stdout.trim() === 'arm-none-eabi' ? 'ok' : 'error', summary: t("编译器目标必须为 arm-none-eabi"), evidence: [result.stdout.trim(), result.stderr] });
   }
   if (tool.id === 'openocd') {
+    if (tool.version === '0.12.0-7-emberprobe-c5.5e6fb45') {
+      try {
+        if (!tool.scriptsDirectory) throw new Error('Missing scripts directory');
+        await verifyC5Files(tool.scriptsDirectory);
+        const result = await runProcess({ executable: tool.executables.openocd,
+          args: ['-s', tool.scriptsDirectory, '-c', 'adapter driver cmsis-dap', '-c', 'transport select swd', '-f', 'target/stm32c5x.cfg', '-c', c5EventScopeCommand,
+            ...c5CheckCommands.flatMap(command => ['-c', command])], timeoutMs: 10000, signal });
+        const ok = result.exitCode === 0 && !result.timedOut && !result.cancelled && `${result.stdout}\n${result.stderr}`.includes('STM32_EASY_C5_READY');
+        checks.push({ code: 'c5', status: ok ? 'ok' : 'error', summary: t('STM32C5 stldr 与本地 loader 配置检查（不连接硬件）'), evidence: [result.stdout, result.stderr] });
+      } catch (error) {
+        checks.push({ code: 'c5', status: 'error', summary: t('STM32C5 组件检查失败'), evidence: [errorText(error)] });
+      }
+    }
     const scripts: [string, string][] = [['cmsis-dap', 'interface/cmsis-dap.cfg'], ['st-link', 'interface/stlink.cfg'], ['jlink', 'interface/jlink.cfg']];
     let complete = true;
     for (const [probe, relative] of scripts) {

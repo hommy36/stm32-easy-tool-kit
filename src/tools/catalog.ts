@@ -4,13 +4,14 @@ import * as path from 'node:path';
 import { ToolId, ToolRelease, toolIds } from '../core/types';
 import { resolveArchiveEntry } from '../core/paths';
 
-export function loadCatalog(file = path.resolve(__dirname, '../../resources/tool-catalog.json')): ToolRelease[] {
+function readCatalog(file: string, expected: number): ToolRelease[] {
   const raw: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
-  if (!Array.isArray(raw) || raw.length !== 4) throw new Error(t("工具清单必须包含四组工具"));
+  if (!Array.isArray(raw) || raw.length !== expected) throw new Error(t("工具清单格式无效"));
   const releases: ToolRelease[] = [];
   for (const value of raw as unknown[]) {
     if (!value || typeof value !== 'object') throw new Error(t("工具清单格式无效"));
     const item = value as Record<string, unknown>;
+    if (item.archiveFormat !== undefined && !['zip', 'tar.gz'].includes(String(item.archiveFormat))) throw new Error(t("工具清单字段无效"));
     if (!toolIds.includes(item.id as ToolId) || typeof item.version !== 'string' || !/^[\w.+-]+$/.test(item.version)
       || item.platform !== 'win32-x64' || typeof item.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(item.sha256)
       || typeof item.url !== 'string' || typeof item.licenseUrl !== 'string') throw new Error(t("工具清单字段无效"));
@@ -37,3 +38,5 @@ export function loadCatalog(file = path.resolve(__dirname, '../../resources/tool
   }
   return releases;
 }
+export function loadCatalog(file = path.resolve(__dirname, '../../resources/tool-catalog.json')): ToolRelease[] { return readCatalog(file, 4); }
+export function loadC5Release(): ToolRelease { return readCatalog(path.resolve(__dirname, '../../resources/openocd-c5-catalog.json'), 1)[0]; }

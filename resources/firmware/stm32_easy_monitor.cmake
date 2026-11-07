@@ -1,0 +1,5 @@
+set(STM32_EASY_MONITOR_DIR "${CMAKE_CURRENT_LIST_DIR}")
+function(stm32_easy_monitor target)
+  target_sources(${target} PRIVATE "${STM32_EASY_MONITOR_DIR}/stm32_easy_monitor.c")
+  target_include_directories(${target} PRIVATE "${STM32_EASY_MONITOR_DIR}")
+endfunction()

@@ -28,8 +28,10 @@ import { openCubeMx } from './tools/cubemx';
 import { DocumentTracker } from './project/documents';
 import { importClion } from './integration/clionImport';
 import { registerEditorIntegration } from './integration/editor';
+import { FeatureCoordinator } from './features';
 
 let activeController: WorkflowController | undefined;
+let activeFeatures: FeatureCoordinator | undefined;
 export function executionGuard(): void {
   if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error(t("首版仅支持 Windows x64 的本地 VS Code"));
   if (vscode.env.remoteName || vscode.workspace.workspaceFolders?.some(folder => folder.uri.scheme !== 'file')) throw new Error(t("首版不支持 WSL/SSH/容器或虚拟工作区；请在本地窗口使用"));
@@ -131,6 +133,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await documents.assertCurrent(evidence);
       executionGuard();
     } });
+  let enhancements: FeatureCoordinator | undefined;
   const controller = new WorkflowController(store, state, host, {
     flash: (evidence, settings, tools, signal) => flashFirmware(evidence, settings, signal, runtime(tools, evidence.projectUri)),
     debug: async (evidence, settings, tools, operationId, signal) => {
@@ -139,23 +142,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       executionGuard();
       if (signal.aborted) throw new BuildCancelled();
       const environment = runtime(tools, evidence.projectUri);
-      const server = await startGdbServer(settings, signal, { ...environment, beforeStart: () => environment.verify(evidence) });
+      const feature = await enhancements?.debugOptions(settings);
+      const server = await startGdbServer(settings, signal, { ...environment, beforeStart: () => environment.verify(evidence),
+        rtos: feature?.debug?.rtos, rtt: feature?.runtime?.enabled ? { address: feature.runtime.address!, searchBytes: feature.runtime.searchBytes ?? 256, channel: feature.runtime.channel ?? 0 } : undefined });
       const owner = new DebugSessionOwner(server, signal, text => host.log('stdout', text));
       try {
         const folder = vscode.workspace.workspaceFolders?.find(item => item.uri.toString() === settings.projectUri);
         if (!folder) throw new Error(t("调试工程已从工作区移除"));
         const { makeDebugConfiguration } = await import('./debug/session');
-        await owner.start(folder, makeDebugConfiguration(evidence, tools, server, settings, operationId), async () => {
+        const configuration = makeDebugConfiguration(evidence, tools, server, settings, operationId);
+        if (feature?.debug?.svd) configuration.svdFile = await enhancements!.svdPath(settings.sourceDirectory, feature.debug.svd);
+        await owner.start(folder, configuration, async () => {
           await environment.verify(evidence);
           if (!vscode.workspace.workspaceFolders?.some(item => item.uri.toString() === settings.projectUri)) throw new Error(t("调试工程已从工作区移除"));
           executionGuard();
           if (signal.aborted) throw new BuildCancelled();
         });
+        if (enhancements && feature) await enhancements.bind(owner, server, feature);
         return owner;
       } catch (error) { await owner.stop(); throw error; }
     }
   }, path.join(context.globalStorageUri.fsPath, 'operation-locks'), undefined, context.workspaceState.get<string>('workbenchProject'));
   activeController = controller;
+  enhancements = new FeatureCoordinator(context, controller, state, diagnostics, executionGuard, runtime);
+  activeFeatures = enhancements; context.subscriptions.push(enhancements);
   context.subscriptions.push(...registerEditorIntegration(context, controller, executionGuard, message => buildOutput.appendLine(message)));
   for (const pattern of ['**/.vscode/stm32-easy.json', '**/.stm32-easy.json']) {
     const sharedWatcher = vscode.workspace.createFileSystemWatcher(pattern);
@@ -230,4 +240,4 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     });
   }
 }
-export async function deactivate(): Promise<void> { await activeController?.stop(); activeController = undefined; await flushVerificationCache(); }
+export async function deactivate(): Promise<void> { await activeController?.stop(); activeFeatures?.dispose(); activeFeatures = undefined; activeController = undefined; await flushVerificationCache(); }

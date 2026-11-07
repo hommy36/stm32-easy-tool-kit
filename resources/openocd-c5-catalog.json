@@ -1,0 +1,18 @@
+[
+  {
+    "id": "openocd",
+    "version": "0.12.0-7-emberprobe-c5.5e6fb45",
+    "platform": "win32-x64",
+    "archiveFormat": "tar.gz",
+    "url": "https://raw.githubusercontent.com/BakeSheep/EmberProbe-MCU-Flash-Debug/5e6fb45b08c6f86b552b49b3c5fa66e35acb0ceb/resources/openocd-win32-x64.tar.gz",
+    "allowedDownloadHosts": ["raw.githubusercontent.com"],
+    "sha256": "227754ab5493ed5b2b05500cddfe081cc93f3f3620068c4fb33c67c7688892fe",
+    "archiveBytes": 2767295,
+    "maxExtractedBytes": 16777216,
+    "maxFileBytes": 8388608,
+    "maxEntries": 2000,
+    "executables": { "openocd": "bin/openocd.exe" },
+    "scriptsDirectory": "openocd/scripts",
+    "licenseUrl": "https://github.com/BakeSheep/EmberProbe-MCU-Flash-Debug/blob/5e6fb45b08c6f86b552b49b3c5fa66e35acb0ceb/native/openocd/README.md"
+  }
+]

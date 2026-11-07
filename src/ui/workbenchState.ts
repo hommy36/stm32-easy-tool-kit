@@ -6,6 +6,8 @@ import { toolIds, toolNames } from '../core/types';
 import { WorkflowController } from '../workflow/controller';
 import { isCmakeProject } from '../project/discover';
 import { capabilities, cortexCompatible, repairForError, repairLabel, ToolSummary } from './presentation';
+import { enhancementSummary } from './enhancementState';
+import { readFeatures } from '../project/features';
 
 export async function toolSummaries(state: ToolState): Promise<ToolSummary[]> {
   const tools = await state.list();
@@ -28,6 +30,7 @@ export async function toolSummaries(state: ToolState): Promise<ToolSummary[]> {
 export async function workbenchState(controller: WorkflowController, tools: ToolState) {
   const view = await controller.view();
   const settings = view.project?.settings;
+  const features = settings ? await readFeatures(settings.sourceDirectory) : undefined;
   const summaries = await toolSummaries(tools);
   const artifact = view.snapshot.evidence?.projectUri === settings?.projectUri ? view.snapshot.evidence?.artifact : undefined;
   const cmakeProject = !!settings && await isCmakeProject(settings.sourceDirectory);
@@ -37,6 +40,8 @@ export async function workbenchState(controller: WorkflowController, tools: Tool
   const input = { settings, cmakeProject, tools: summaries, supported, trusted: vscode.workspace.isTrusted, cortex, artifact };
   const repair = repairForError(view.snapshot.message);
   return {
+    optimization: { level: features?.settings.build?.optimization ?? 'default', revision: features?.revision },
+    enhancement: enhancementSummary(settings?.projectUri),
     project: view.project, projects: (vscode.workspace.workspaceFolders ?? []).filter(folder => folder.uri.scheme === 'file')
       .map(folder => ({ uri: folder.uri.toString(), label: folder.name })),
     configurations: view.metadata?.configure.map(choice => ({ name: choice.name, label: choice.displayName || choice.name })) ?? [],

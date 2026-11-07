@@ -18,10 +18,11 @@
   }
   function enabled() {
     if (!state) return;
-    for (const id of ['project', 'preset', 'target', 'probe']) el(id).disabled = pending || state.busy;
+    for (const id of ['project', 'preset', 'target', 'probe', 'optimization']) el(id).disabled = pending || state.busy;
     el('preset').disabled ||= !state.project || !state.configurations.length;
     el('target').disabled ||= !state.project || !state.targets.length;
     el('probe').disabled ||= !state.project;
+    el('optimization').disabled ||= !state.project;
     for (const action of actions) {
       el(action).disabled = pending || !state.capabilities[action].enabled;
       el(action).title = state.capabilities[action].reason;
@@ -54,6 +55,9 @@
     const presetDefault = settings?.configurePreset
       ?? (message.configurations.find(item => item.name === 'Debug') ?? message.configurations[0])?.name;
     options('preset', message.configurations.map(item => ({ value: item.name, label: item.label })), presetDefault, t("读取并选择构建方案"));
+    el('optimization').value = message.optimization?.level ?? 'default';
+    el('optimizationHint').hidden = el('optimization').value === 'default';
+    el('optimizationHint').textContent = t('覆盖为 -{0} · 下次编译生效', el('optimization').value);
     options('target', message.targets.map((item, index) => ({ value: String(index), label: item.name + (item.configuration ? ` · ${item.configuration}` : '') })),
       settings?.targetId ? String(message.targets.findIndex(item => item.id === settings.targetId && item.configuration === settings.configuration)) : '', t("配置后识别；编译时可选择"));
     el('source').textContent = settings?.sourceDirectory ?? '';
@@ -74,6 +78,10 @@
     el('status').className = current && ['failed', 'uncertain'].includes(message.snapshot.phase) ? 'failure' : '';
     el('artifact').textContent = message.artifact ? t("固件：{0}", message.artifact) : '';
     const flash = message.snapshot.lastFlash;
+    const metrics = message.enhancement;
+    const summary = el('result-summary'); summary.replaceChildren();
+    if (metrics && metrics.elapsedMs !== undefined) for (const [label,value] of [[summary.dataset.duration,(metrics.elapsedMs/1000).toFixed(1)],[summary.dataset.errors,metrics.errors??0],[summary.dataset.warnings,metrics.warnings??0]]) { const item=document.createElement('div'),number=document.createElement('strong'); item.textContent=label;number.textContent=String(value);item.append(number);summary.append(item); }
+    el('memory-mini').textContent=(metrics?.memory??[]).map(r=>r.name+': '+(r.used/1024).toFixed(1)+' KiB'+(r.capacity?' / '+(r.capacity/1024).toFixed(0)+' KiB':'')).join(' · ');
     el('history').textContent = flash && settings && flash.projectUri === settings.projectUri ? t("上次烧录成功：{0}", new Date(flash.at).toLocaleString(window.stm32I18n.language)) : '';
     el('repair').hidden = !current || !['failed', 'uncertain'].includes(message.snapshot.phase);
     el('repair').textContent = message.repair.label;
@@ -97,6 +105,7 @@
   document.querySelectorAll('[data-action]').forEach(button => button.onclick = () => post(button.dataset.action));
   el('project').onchange = () => { if (el('project').value) post('project', { value: el('project').value }); };
   el('preset').onchange = () => { if (el('preset').value) post('preset', { value: el('preset').value }); };
+  el('optimization').onchange = () => post('optimization', { value: el('optimization').value, featureRevision: state?.optimization?.revision });
   el('target').onchange = () => {
     const target = state?.targets[Number(el('target').value)];
     if (el('target').value !== '' && target) post('target', { value: target.id, configuration: target.configuration });

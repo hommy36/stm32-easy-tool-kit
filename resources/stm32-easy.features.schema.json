@@ -1,0 +1,179 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "budgets": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "description": "Per-region byte budgets; warnings never block build or flash."
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "address": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Numeric address of _STM32_EASY_RTT from the matching ELF."
+        },
+        "searchBytes": {
+          "type": "integer",
+          "minimum": 24,
+          "maximum": 16777216,
+          "default": 256
+        },
+        "channel": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15,
+          "default": 0
+        },
+        "firmwareId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]{1,80}$"
+        },
+        "cacheCoherent": {
+          "type": "boolean",
+          "description": "Set true only after verifying non-cacheable RTT placement (required for H7)."
+        },
+        "autoDetect": {
+          "type": "boolean",
+          "description": "Resolve RTT address and exported firmware identity from the current verified ELF before connecting."
+        },
+        "samplePeriodMs": {
+          "enum": [
+            100,
+            200,
+            500,
+            1000
+          ],
+          "default": 1000,
+          "description": "Requested heap period. Use Heap sampling rate to update the firmware build definition, then rebuild and flash. Editing this value alone does not change running firmware."
+        }
+      }
+    },
+    "debug": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "svd": {
+          "type": "string",
+          "description": "Project-relative SVD file."
+        },
+        "rtos": {
+          "enum": [
+            "FreeRTOS"
+          ]
+        },
+        "core": {
+          "enum": [
+            "m0",
+            "m3",
+            "m4",
+            "m7",
+            "m33"
+          ]
+        },
+        "heapImplementation": {
+          "enum": [
+            "heap_4",
+            "heap_5"
+          ],
+          "description": "Enables read-only paused counters when symbols are available."
+        },
+        "stack": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "low": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "high": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "pointer": {
+              "enum": [
+                "msp",
+                "psp"
+              ]
+            }
+          },
+          "required": [
+            "low",
+            "high",
+            "pointer"
+          ]
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "armGnu": {
+          "type": "string",
+          "maxLength": 180
+        },
+        "cmake": {
+          "type": "string",
+          "maxLength": 180
+        },
+        "ninja": {
+          "type": "string",
+          "maxLength": 180
+        },
+        "openocd": {
+          "type": "string",
+          "maxLength": 180
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "optimization": {
+          "enum": [
+            "default",
+            "O0",
+            "Og",
+            "O1",
+            "O2",
+            "O3",
+            "Os",
+            "Oz"
+          ],
+          "default": "default",
+          "description": "Default follows the selected preset. Other values override C/C++ optimization on the next build without changing its build type or defines."
+        }
+      }
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "STM32 Easy optional features",
+  "required": [
+    "version"
+  ]
+}

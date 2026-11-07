@@ -2,8 +2,9 @@ import { t } from './i18n';
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { ToolState } from './tools/state';
-import { loadCatalog } from './tools/catalog';
-import { findCandidates, validateExistingTool } from './tools/detect';
+import { loadCatalog, loadC5Release } from './tools/catalog';
+import { validateExistingTool } from './tools/detect';
+import { existingToolCandidates, ExistingToolCandidate } from './tools/existing';
 import { checkInstallation } from './tools/check';
 import { installRelease } from './tools/install';
 import { ToolId, ToolRelease, ToolInstallation, CheckResult, toolIds, toolNames, errorText } from './core/types';
@@ -30,6 +31,13 @@ export function registerCommands(context: vscode.ExtensionContext, state: ToolSt
     }
   });
   const exclusive = (action: () => Promise<void>) => state.exclusive(action);
+  const chooseRelease = async (release: ToolRelease): Promise<ToolRelease | undefined> => {
+    if (release.id !== 'openocd') return release;
+    return (await vscode.window.showQuickPick([
+      { label: t('STM32C5 实验支持'), description: t('EmberProbe 第三方构建 · ST stldr 补丁及本地 loader · 未实机验收'), release: loadC5Release() },
+      { label: t('标准 OpenOCD'), description: t('xPack {0}；不含 C5 支持', release.version), release }
+    ], { title: t('选择 OpenOCD 发行包'), matchOnDescription: true }))?.release;
+  };
   const chooseTool = async (id?: unknown): Promise<ToolId | undefined> => {
     if (typeof id === 'string' && toolIds.includes(id as ToolId)) return id as ToolId;
     return (await vscode.window.showQuickPick(toolIds.map(value => ({ label: toolNames[value], id: value })), { title: t("选择工具") }))?.id;
@@ -57,7 +65,7 @@ export function registerCommands(context: vscode.ExtensionContext, state: ToolSt
     const directory = custom || path.join(context.globalStorageUri.fsPath, 'tools');
     if (!path.isAbsolute(directory)) throw new Error(t("工具根目录必须为绝对路径"));
     const confirmed = await vscode.window.showInformationMessage(
-      t("{0} {1}\n{2} MiB ZIP\n来源: {3}\n许可: {4}\n安装目录: {5}\n不会删除或覆盖旧安装，也不会修改工程文件。", toolNames[release.id], release.version, Math.ceil(release.archiveBytes / 1024 / 1024), release.url, release.licenseUrl, directory),
+      t("{0} {1}\n{2} MiB {6}\n来源: {3}\n许可及源码说明: {4}\n安装目录: {5}\n不会删除或覆盖旧安装，也不会修改工程文件。", toolNames[release.id], release.version, Math.ceil(release.archiveBytes / 1024 / 1024), release.url, release.licenseUrl, directory, release.archiveFormat ?? 'zip'),
       { modal: true }, archive ? t("校验并导入") : t("下载并安装"));
     if (!confirmed) return;
     guard();
@@ -84,31 +92,39 @@ export function registerCommands(context: vscode.ExtensionContext, state: ToolSt
       if (typeof argument === 'string' && toolIds.includes(argument as ToolId)) {
         const release = catalog.find(item => item.id === argument);
         if (!release) throw new Error(t("清单中没有该工具"));
-        await install(release); return;
+        const chosen = await chooseRelease(release);
+        if (chosen) await install(chosen); return;
       }
       const selected = await vscode.window.showQuickPick(catalog.map(release => ({ label: toolNames[release.id], description: release.version, picked: true, release })), { title: t("选择要安装的固定版本工具"), canPickMany: true });
       if (!selected) return;
-      for (const item of selected) await install(item.release);
+      for (const item of selected) { const chosen = await chooseRelease(item.release); if (chosen) await install(chosen); }
     })),
     register('importToolArchive', async (argument?: unknown) => exclusive(async () => {
       const id = await chooseTool(argument);
       if (!id) return;
-      const release = loadCatalog().find(item => item.id === id);
-      if (!release) throw new Error(t("清单中没有该工具"));
-      const files = await vscode.window.showOpenDialog({ title: t("导入 {0} {1} 的原始 ZIP", toolNames[id], release.version), canSelectMany: false, filters: { ZIP: ['zip'] } });
+      const standard = loadCatalog().find(item => item.id === id);
+      if (!standard) throw new Error(t("清单中没有该工具"));
+      const release = await chooseRelease(standard);
+      if (!release) return;
+      const files = await vscode.window.showOpenDialog({ title: t("导入 {0} {1} 的原始工具包", toolNames[id], release.version), canSelectMany: false, filters: release.archiveFormat === 'tar.gz' ? { 'TAR.GZ': ['gz'] } : { ZIP: ['zip'] } });
       if (files?.[0]) await install(release, files[0].fsPath);
     })),
     register('selectExistingTool', async (argument?: unknown) => exclusive(async () => {
       const id = await chooseTool(argument);
       if (!id) return;
-      const candidates = await findCandidates(id, log);
+      const custom = vscode.workspace.getConfiguration('stm32Easy').get<string>('toolsDirectory', '').trim();
+      const active = (await state.list()).find(tool => tool.id === id);
+      const candidates = await existingToolCandidates(id, [path.join(context.globalStorageUri.fsPath, 'tools'), custom], active, log);
       const choices = [
-        ...candidates.map(root => ({ label: root, description: t("已发现的程序目录，尚未执行检查"), root })),
-        { label: t("浏览安装目录…"), description: t("手动选择已有安装，无需修改系统 PATH"), root: '' }
+        ...candidates.map(candidate => ({ label: `${toolNames[id]}${candidate.version ? ' ' + candidate.version : ''}`,
+          description: [candidate.source === 'managed' ? t("插件下载") : t("外部安装"), candidate.current ? t("当前使用") : ''].filter(Boolean).join(' · '),
+          detail: candidate.root, root: candidate.root, candidate: candidate as ExistingToolCandidate | undefined })),
+        { label: t("浏览安装目录…"), description: t("手动选择已有安装，无需修改系统 PATH"), detail: '', root: '', candidate: undefined }
       ];
-      const sources = id === 'openocd' ? t("PATH 和 CLion 的已有配置") : 'PATH';
+      const sources = id === 'openocd' ? t("插件下载目录、当前安装、PATH 和 CLion 配置") : t("插件下载目录、当前安装和 PATH");
       const choice = await vscode.window.showQuickPick(choices, {
         title: t("选择 {0} 已有安装（不会自动执行候选程序）", toolNames[id]),
+        matchOnDescription: true, matchOnDetail: true,
         placeHolder: candidates.length ? t("已查找 {0}；请选择或手动浏览", sources)
           : t("{0} 中未发现可访问的程序；不代表未安装，请浏览安装目录", sources)
       });
@@ -120,9 +136,14 @@ export function registerCommands(context: vscode.ExtensionContext, state: ToolSt
       if (!confirmed) return;
       guard();
       const tool = await validateExistingTool(id, root);
+      if (choice.candidate?.source === 'managed') {
+        tool.source = 'managed';
+        tool.root = choice.candidate.installationRoot!;
+        tool.version = choice.candidate.version!;
+      }
       await state.select(tool);
       state.results.delete(id);
-      log(t("已选择外部工具 {0}: {1}", toolNames[id], root));
+      log(t("已选择工具 {0}: {1}", toolNames[id], root));
     })),
     register('checkEnvironment', async (argument?: unknown) => exclusive(async () => {
       const id = typeof argument === 'string' && toolIds.includes(argument as ToolId) ? argument as ToolId : undefined;

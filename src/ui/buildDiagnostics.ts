@@ -15,6 +15,9 @@ export class BuildDiagnostics implements vscode.Disposable {
   private readonly files = new Map<string, vscode.Diagnostic[]>();
   private tails = { stdout: '', stderr: '' };
   private cwd = process.cwd();
+  counts(): { errors: number; warnings: number } {
+    const rows = [...this.files.values()].flat(); return { errors: rows.filter(item=>item.severity===vscode.DiagnosticSeverity.Error).length, warnings: rows.filter(item=>item.severity===vscode.DiagnosticSeverity.Warning).length };
+  }
   begin(): void { this.collection.clear(); this.files.clear(); this.tails = { stdout: '', stderr: '' }; }
   setDirectory(directory: string): void {
     if (path.resolve(directory).toLowerCase() !== path.resolve(this.cwd).toLowerCase()) this.flush();

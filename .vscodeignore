@@ -13,3 +13,5 @@ node_modules/typescript/**
 node_modules/@types/**
 node_modules/@vscode/vsce/**
 *.vsix
+node_modules/echarts/**
+node_modules/zrender/**
