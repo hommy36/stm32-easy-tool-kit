@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { t } from '../i18n';
 import { WorkflowController } from '../workflow/controller';
 
-import { compilerDrivers, mergeClangdArguments, mergeDatabases } from './editorDatabase';
+import { compilerDrivers, mergeClangdArguments, mergeDatabases, sanitizeCompileCommands } from './editorDatabase';
 
 // Use one workspace-level database for all roots, including added external libraries.
 // Never copy compiler paths into the shared STM32 project configuration.
@@ -46,11 +47,22 @@ export function registerEditorIntegration(context: vscode.ExtensionContext, cont
       const commands: unknown = JSON.parse(await fs.readFile(database, 'utf8'));
       if (!Array.isArray(commands) || !commands.length || commands.length > 20000) throw new Error(t('编译数据库缺失或无效，请重新配置 CMake'));
       const drivers = compilerDrivers(commands);
+      let editorDatabase = database;
+      let editorDirectory = path.dirname(database);
+      const sanitized = sanitizeCompileCommands(commands);
+      if (sanitized.changed) {
+        const key = createHash('sha256').update(`${identity.settings.projectUri}|${view.model.binaryDirectory}`).digest('hex').slice(0, 16);
+        editorDirectory = path.join(context.globalStorageUri.fsPath, 'clangd-database', key);
+        await fs.mkdir(editorDirectory, { recursive: true });
+        editorDatabase = path.join(editorDirectory, 'compile_commands.json');
+        await fs.writeFile(editorDatabase, JSON.stringify(sanitized.commands));
+        log(t('已将 C++ 源文件的 C 标准参数转换为 C++ 标准，供编辑器补全使用'));
+      }
       const folder = vscode.workspace.workspaceFolders?.find(folder => folder.uri.toString() === identity.settings.projectUri);
       if (!folder) return;
-      const relative = path.relative(folder.uri.fsPath, database);
+      const relative = path.relative(folder.uri.fsPath, editorDatabase);
       const reference = !path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`)
-        ? `\${workspaceFolder:${folder.name}}/${relative.replace(/\\/g, '/')}` : database;
+        ? `\${workspaceFolder:${folder.name}}/${relative.replace(/\\/g, '/')}` : editorDatabase;
       const current = await controller.view();
       if (controller.isBusy || current.project?.revision !== identity.revision || current.project.settings.projectUri !== identity.settings.projectUri) return;
       guard();
@@ -74,13 +86,13 @@ export function registerEditorIntegration(context: vscode.ExtensionContext, cont
       if (hasClangd) {
         const clangd = vscode.workspace.getConfiguration('clangd');
         const before = clangd.inspect<unknown>('arguments')?.workspaceValue;
-        const next = mergeClangdArguments(before ?? clangd.get<unknown>('arguments'), path.dirname(database), drivers);
+        const next = mergeClangdArguments(before ?? clangd.get<unknown>('arguments'), editorDirectory, drivers);
         if (JSON.stringify(next) !== JSON.stringify(before)) {
           await clangd.update('arguments', next, vscode.ConfigurationTarget.Workspace);
           void vscode.commands.executeCommand('clangd.restart').then(() => undefined, () => undefined);
         }
       }
-      log(t('编辑器编译数据库已同步：{0}', database));
+      log(t('编辑器编译数据库已同步：{0}', editorDatabase));
     } finally {
       updating = false;
       if (resync || pendingFolders) { resync = false; void sync().catch(error => log(String(error))); }

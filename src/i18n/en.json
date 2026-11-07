@@ -841,5 +841,6 @@
   "编译命令数据库过大，无法确认优化等级": "Compilation database is too large to verify optimization",
   "无法确认实际编译优化等级": "Cannot verify the effective optimization level",
   "工程覆盖了优化参数，未能应用 -{0}：{1}。请选择默认或检查自定义编译规则。": "The project replaced the compiler rule; -{0} did not apply to {1}. Select Default or check custom rules.",
-  "没有可验证的 C/C++ 编译命令，无法应用优化覆盖": "No verifiable C/C++ compilation commands; cannot apply optimization override"
+  "没有可验证的 C/C++ 编译命令，无法应用优化覆盖": "No verifiable C/C++ compilation commands; cannot apply optimization override",
+  "已将 C++ 源文件的 C 标准参数转换为 C++ 标准，供编辑器补全使用": "Converted C standard flags on C++ sources to a C++ standard for editor completion"
 }
