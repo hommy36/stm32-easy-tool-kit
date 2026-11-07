@@ -19,7 +19,7 @@ export class SerialService {
       this.events.on('status',status);child.once('close',closed);
     });
     let buffer='';child.stdout.setEncoding('utf8');child.stdout.on('data',text=>{buffer+=text;if(buffer.length>131072){child.kill();this.events.emit('status','Serial output protocol limit exceeded.');return;}let newline;while((newline=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,newline);buffer=buffer.slice(newline+1);try{const frame=JSON.parse(line);if(frame.type==='data'&&typeof frame.data==='string'&&frame.data.length<8192)this.events.emit('data',Buffer.from(frame.data,'base64'));else this.events.emit('status',frame.message??frame.type);}catch{this.events.emit('status','Invalid serial host output.');}}});
-    child.stderr.on('data',chunk=>this.events.emit('status',String(chunk).slice(0,2000)));child.on('error',error=>this.events.emit('status',error.message));
+    child.stderr.on('data',chunk=>this.events.emit('diagnostic',String(chunk).slice(0,2000)));child.on('error',error=>this.events.emit('status',error.message));
     child.on('close',()=>{if(this.child===child){this.child=undefined;this.opened=false;}this.events.emit('status','closed');});child.stdin.on('error',error=>this.events.emit('status',error.message));
     child.stdin.write(JSON.stringify({port,baud})+'\n');await connected;
   }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.13 — 2026-11-07
+
+- Fixed the serial terminal failing to connect: PowerShell 5.1 writes a `#< CLIXML` header to redirected stderr, which the old code treated as a fatal status and closed the session. Stderr is now diagnostic only; real errors still arrive as JSON on stdout.
+- Verified locally against COM19 at 115200 baud: connection stays open and received data is forwarded.
+
 ## 0.7.12 — 2026-11-07
 
 - Includes the memory workbench, optional RTT monitoring, Chinese documentation, tool discovery and C5 fixes developed in the local 0.7.x builds below. Runtime monitoring and the C5 tool package remain experimental; hardware validation is limited to recorded combinations.
