@@ -134,7 +134,11 @@ export class BuildService {
     const previous = await fileApiStamp(selection.binaryDirectory);
     await prepareFileApi(selection.binaryDirectory);
     const optimizationArgs = await optimizationConfigureArgs(selection);
-    await this.execute(selection.sourceDirectory, [...(selection.configureArgs ?? ['--preset', selection.configurePreset]), '-DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON', ...optimizationArgs], signal, false,
+    const ninja = this.tools.find(tool => tool.id === 'ninja')?.executables.ninja;
+    const makeProgram = selection.generator?.startsWith('Ninja') && ninja && path.isAbsolute(ninja)
+      ? `-DCMAKE_MAKE_PROGRAM=${ninja.replace(/\\/g, '/')}` : undefined;
+    await this.execute(selection.sourceDirectory, [...(selection.configureArgs ?? ['--preset', selection.configurePreset]),
+      '-DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON', ...(makeProgram ? [makeProgram] : []), ...optimizationArgs], signal, false,
       selection.configureArgs ? selection.configureEnvironment : this.environment);
     await verifyOptimization(selection);
     const model = await readBuildModel(selection.binaryDirectory);
