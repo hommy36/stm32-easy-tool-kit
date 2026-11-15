@@ -17,12 +17,13 @@ function settings(probe, extra = {}) {
 const argsOf = (settings, dialect = 'legacy') => buildConfigArgs(settings, 'D:/OpenOCD/scripts', dialect);
 const has = (args, value) => args.includes(value);
 
-test('CMSIS-DAP keeps backend selection; ST-Link and J-Link select their own adapter driver', () => {
+test('CMSIS-DAP keeps backend selection; ST-Link and J-Link load their adapter configuration', () => {
   const dap = argsOf(settings('cmsis-dap', { backend: 'hid' }), 'modern');
   assert.ok(has(dap, 'adapter driver cmsis-dap')); assert.ok(has(dap, 'cmsis-dap backend hid'));
 
   const st = argsOf(settings('st-link'), 'modern');
-  assert.ok(has(st, 'adapter driver st-link')); assert.ok(has(st, 'transport select swd'));
+  assert.ok(has(st, 'source [find interface/stlink.cfg]')); assert.ok(has(st, 'transport select swd'));
+  assert.equal(has(st, 'adapter driver st-link'), false);
   assert.equal(st.some(value => value.includes('backend')), false);
   assert.ok(st.some(value => value.startsWith('source ') && value.includes('stm32f4x.cfg')));
 
@@ -103,7 +104,7 @@ test('openocd capability check probes the selected probe and detects the dialect
   const resolved = await resolveDapConfiguration(st, new AbortController().signal, runtime(f.scripts, executable, run));
   assert.equal(resolved.dialect, 'legacy');
   assert.equal(calls.length, 2);
-  assert.ok(calls[0].includes('adapter driver st-link')); assert.ok(calls[0].includes('transport select swd'));
+  assert.ok(calls[0].includes('source [find interface/stlink.cfg]')); assert.ok(calls[0].includes('transport select swd'));
   assert.equal(calls[0].includes('-s'), true);
   assert.ok(calls[1].includes('source [find interface/stlink.cfg]')); assert.ok(calls[1].includes('transport select hla_swd'));
   assert.equal(calls[0].some(value => value.includes('cmsis-dap')), false);

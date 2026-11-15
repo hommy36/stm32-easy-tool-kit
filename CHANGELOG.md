@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix modern OpenOCD ST-Link setup by loading the standard interface script, which configures the supported ST-Link USB VID/PID values before opening the probe.
+
 ## 0.7.15 — 2026-11-12
 
 - Fixed repeated full rebuilds in projects that use native CMake presets: the configure step now always passes the selected Ninja as `-DCMAKE_MAKE_PROGRAM`. Previously CMake could cache the Ninja bundled with STM32CubeCLT, while the extension queried with its selected Ninja; alternating Ninja versions reset `.ninja_log` and marked every object dirty.
