@@ -43,7 +43,7 @@ function targetPath(settings: ProjectSettings, scriptsDirectory: string): string
 function driverCommands(settings: ProjectSettings, dialect: DapDialect): string[] {
   const probe = probeOf(settings);
   if (dialect === 'modern') {
-    if (probe === 'st-link') return ['adapter driver st-link'];
+    if (probe === 'st-link') return ['source [find interface/stlink.cfg]'];
     if (probe === 'jlink') return ['adapter driver jlink'];
     return ['adapter driver cmsis-dap', `cmsis-dap backend ${settings.backend}`];
   }
