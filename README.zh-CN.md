@@ -107,7 +107,7 @@ VSIX 安装方式：在 VS Code 扩展视图右上角菜单选择 **从 VSIX 安
 - 首次硬件操作展示工程、芯片、脚本、固件和 SWD 参数摘要；选择 **确认并记住** 后，配置和脚本内容不变时不再重复询问。
 - 烧录 = 先编译，成功后烧录当前 ELF、校验并复位运行；编译失败不会烧录旧固件。
 - 调试 = 先编译，再通过插件拥有的 OpenOCD 本地服务器接入 Cortex-Debug；不先独立烧录一遍。
-- DAPLink 使用 `adapter driver cmsis-dap`，通信方式（auto / HID / USB Bulk）只对 DAPLink 生效；ST-Link 使用 `adapter driver st-link` 或旧版 `interface/stlink.cfg` + `hla_swd`，旧版序列号用 `hla_serial`；J-Link 使用 `adapter driver jlink`。
+- DAPLink 使用 `adapter driver cmsis-dap`，通信方式（auto / HID / USB Bulk）只对 DAPLink 生效；ST-Link 加载 `interface/stlink.cfg` 走直接 DAP（该脚本提供 ST-Link 的 USB VID/PID，裸 `adapter driver st-link` 会报 `Error: open failed`），HLA 回退加载 `interface/stlink-hla.cfg`（0.12.0 为 `interface/stlink.cfg`）+ `hla_swd`，旧版序列号用 `hla_serial`；J-Link 使用 `adapter driver jlink`。
 - 换探针会改变硬件授权条件，首次使用需重新确认。
 - 当前 Windows GDB 调试要求源码目录和 ELF 为 **ASCII 路径**；中文路径仍可编译和独立烧录。
 - **安全**：连接电机、摩擦轮等执行器时先切断动力电源，仅给控制板供电。停止不能撤销已写入的 Flash；插件不自动重试危险操作。

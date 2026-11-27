@@ -3,7 +3,8 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { runProcess } from '../core/process';
 import { CheckResult, ToolInstallation, errorText } from '../core/types';
-import { probeLabel } from '../project/types';
+import { debugProbes, probeLabel } from '../project/types';
+import { DapDialect, adapterCommands } from '../dap/config';
 import { c5CheckCommands, verifyC5Files, c5EventScopeCommand } from '../dap/c5';
 
 export async function checkInstallation(tool: ToolInstallation, signal?: AbortSignal): Promise<CheckResult[]> {
@@ -55,11 +56,23 @@ export async function checkInstallation(tool: ToolInstallation, signal?: AbortSi
         summary: found ? t("找到 {0} 接口脚本", relative) : t("缺少 {0} 接口脚本", relative), evidence: [script] });
     }
     if (complete) {
-      for (const probe of ['cmsis-dap', 'st-link', 'jlink'] as const) {
-        const result = await runProcess({ executable: tool.executables.openocd, args: ['-c', `adapter driver ${probe}`, '-c', 'shutdown'], timeoutMs: 10000, signal });
-        checks.push({ code: `adapter.${probe}`, status: result.exitCode === 0 ? 'ok' : 'error',
-          summary: t("{0} 驱动配置能力{1}", probeLabel(probe), result.exitCode === 0 ? t("可用") : t("不可用")),
-          evidence: [result.stdout, result.stderr] });
+      for (const probe of debugProbes) {
+        // ST-Link direct-DAP needs the interface script for its USB VID/PID; 0.12 only offers HLA.
+        const dialects: DapDialect[] = probe === 'st-link' ? ['modern', 'legacy'] : ['modern'];
+        const evidence: string[] = [];
+        let dialect: DapDialect | undefined;
+        for (const candidate of dialects) {
+          const result = await runProcess({ executable: tool.executables.openocd,
+            args: ['-s', tool.scriptsDirectory!, ...adapterCommands(probe, candidate).flatMap(command => ['-c', command]), '-c', 'shutdown'],
+            timeoutMs: 10000, signal });
+          evidence.push(`[${candidate}]`, result.stdout.trim(), result.stderr.trim());
+          if (result.exitCode === 0 && !result.timedOut && !result.cancelled) { dialect = candidate; break; }
+        }
+        const status = dialect === undefined ? t("不可用")
+          : probe !== 'st-link' ? t("可用")
+          : dialect === 'modern' ? t("可用（直接 DAP）") : t("可用（仅 HLA 回退）");
+        checks.push({ code: `adapter.${probe}`, status: dialect ? 'ok' : 'error',
+          summary: t("{0} 驱动配置能力{1}", probeLabel(probe), status), evidence });
       }
       for (const backend of ['hid', 'usb_bulk']) {
         const result = await runProcess({ executable: tool.executables.openocd,

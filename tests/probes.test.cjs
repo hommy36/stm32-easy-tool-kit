@@ -5,7 +5,7 @@ const path = require('node:path');
 const { pathToFileURL, fileURLToPath } = require('node:url');
 require('../out/i18n').setLanguage('en');
 const { defaultProjectSettings, validateProjectSettings, validateAuthorization, authorizationFrom, authorizationMatches } = require('../out/project/types');
-const { buildConfigArgs, buildFlashArgs, resolveDapConfiguration } = require('../out/dap/config');
+const { buildConfigArgs, buildFlashArgs, resolveDapConfiguration, adapterCommands } = require('../out/dap/config');
 const { portableConfiguration } = require('../out/project/shared');
 
 const hash = 'a'.repeat(64);
@@ -33,10 +33,13 @@ test('CMSIS-DAP keeps backend selection; ST-Link and J-Link load their adapter c
   assert.ok(has(legacyJl, 'source [find interface/jlink.cfg]')); assert.ok(has(legacyJl, 'transport select swd'));
 });
 
-test('legacy ST-Link uses stlink.cfg, hla_swd and hla_serial; legacy J-Link cannot select a serial', () => {
+test('legacy ST-Link prefers the HLA script and falls back to 0.12 stlink.cfg; legacy J-Link cannot select a serial', () => {
   const serial = 'ST-LINK-1';
   const st = argsOf(settings('st-link', { serial }), 'legacy');
-  assert.ok(has(st, 'source [find interface/stlink.cfg]')); assert.ok(has(st, 'transport select hla_swd'));
+  const viaHla = st.find(value => value.includes('stlink-hla.cfg'));
+  assert.ok(viaHla.startsWith('if {[catch {source [find interface/stlink-hla.cfg]}]}'));
+  assert.ok(viaHla.includes('source [find interface/stlink.cfg]}'));
+  assert.ok(has(st, 'transport select hla_swd'));
   assert.ok(has(st, 'hla_serial "ST-LINK-1"')); assert.equal(st.some(value => value.startsWith('adapter serial')), false);
 
   const modern = argsOf(settings('st-link', { serial }), 'modern');
@@ -44,6 +47,15 @@ test('legacy ST-Link uses stlink.cfg, hla_swd and hla_serial; legacy J-Link cann
 
   assert.throws(() => argsOf(settings('jlink', { serial }), 'legacy'), /J-Link/);
   assert.ok(has(argsOf(settings('jlink'), 'legacy'), 'source [find interface/jlink.cfg]'));
+});
+
+test('the OpenOCD self-check issues the same ST-Link adapter commands as a debug session', () => {
+  const modern = adapterCommands('st-link', 'modern');
+  assert.deepEqual(modern, ['source [find interface/stlink.cfg]', 'transport select swd']);
+  for (const command of modern) assert.ok(has(argsOf(settings('st-link'), 'modern'), command));
+  for (const command of adapterCommands('st-link', 'legacy')) assert.ok(has(argsOf(settings('st-link'), 'legacy'), command));
+  assert.deepEqual(adapterCommands('cmsis-dap', 'modern'), ['adapter driver cmsis-dap', 'transport select swd']);
+  assert.deepEqual(adapterCommands('cmsis-dap', 'legacy', 'hid'), ['adapter driver cmsis-dap', 'cmsis_dap_backend hid', 'transport select swd']);
 });
 
 test('board scripts guard the selected adapter and never load a second interface', () => {
@@ -106,7 +118,7 @@ test('openocd capability check probes the selected probe and detects the dialect
   assert.equal(calls.length, 2);
   assert.ok(calls[0].includes('source [find interface/stlink.cfg]')); assert.ok(calls[0].includes('transport select swd'));
   assert.equal(calls[0].includes('-s'), true);
-  assert.ok(calls[1].includes('source [find interface/stlink.cfg]')); assert.ok(calls[1].includes('transport select hla_swd'));
+  assert.ok(calls[1].some(value => value.includes('stlink-hla.cfg'))); assert.ok(calls[1].includes('transport select hla_swd'));
   assert.equal(calls[0].some(value => value.includes('cmsis-dap')), false);
   await fs.rm(f.root, { recursive: true, force: true });
 });

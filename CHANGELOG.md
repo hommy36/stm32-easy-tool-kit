@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.7.16 — 2026-11-27
 
-- Fix modern OpenOCD ST-Link setup by loading the standard interface script, which configures the supported ST-Link USB VID/PID values before opening the probe.
+- Fixed ST-Link debugging failing with `Error: open failed` on OpenOCD 0.13+ builds (#1). The direct-DAP driver was started without `interface/stlink.cfg`, and that script is what supplies the ST-Link USB VID/PID list; without it libusb matches no device at all. Debug and flash both load the interface script now.
+- The HLA fallback loads `interface/stlink-hla.cfg` and falls back to `interface/stlink.cfg`, so probes with firmware older than V2J24 keep working on both the 0.12 and the 0.13+ script layout.
+- The OpenOCD self-check now issues the same adapter commands as a debug session instead of a bare `adapter driver <probe>`, passes `-s` so the interface script is actually resolved, and reports whether ST-Link runs in direct-DAP or HLA-fallback mode instead of treating a bare driver load as support.
+- The probe guide and README no longer recommend the bare `adapter driver st-link` setup that triggers the failure.
 
 ## 0.7.15 — 2026-11-12
 

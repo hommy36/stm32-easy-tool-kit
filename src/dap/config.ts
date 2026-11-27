@@ -2,13 +2,13 @@ import { t } from '../i18n';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
-import { ToolInstallation } from '../core/types';
+import { DapBackend, ToolInstallation } from '../core/types';
 import { JobRequest, JobResult } from '../core/jobProcess';
 import { RunRequest, RunResult } from '../core/types';
 import { runProcess } from '../core/process';
 import { BuildCancelled } from '../build/service';
 import { BuildEvidence, isWithin } from '../build/artifacts';
-import { ProjectSettings, probeOf, validateProjectSettings } from '../project/types';
+import { DebugProbe, ProjectSettings, probeOf, validateProjectSettings } from '../project/types';
 import { isC5Target, verifyC5Files, c5CheckCommands, c5EventScopeCommand } from './c5';
 
 export type DapDialect = 'modern' | 'legacy';
@@ -40,16 +40,18 @@ function targetPath(settings: ProjectSettings, scriptsDirectory: string): string
   if (!path.isAbsolute(script) && !isWithin(scriptsDirectory, file)) throw new Error(t("相对目标脚本不能越过 OpenOCD scripts"));
   return file;
 }
-function driverCommands(settings: ProjectSettings, dialect: DapDialect): string[] {
-  const probe = probeOf(settings);
+interface ProbeConfig { probe: DebugProbe; backend?: DapBackend }
+/** OpenOCD >= 0.13 keeps the ST-Link HLA driver in its own script; 0.12 still ships HLA as interface/stlink.cfg. */
+const legacyStlinkInterface = 'if {[catch {source [find interface/stlink-hla.cfg]}]} {source [find interface/stlink.cfg]}';
+function driverCommands(config: ProbeConfig, dialect: DapDialect): string[] {
   if (dialect === 'modern') {
-    if (probe === 'st-link') return ['source [find interface/stlink.cfg]'];
-    if (probe === 'jlink') return ['adapter driver jlink'];
-    return ['adapter driver cmsis-dap', `cmsis-dap backend ${settings.backend}`];
+    if (config.probe === 'st-link') return ['source [find interface/stlink.cfg]'];
+    if (config.probe === 'jlink') return ['adapter driver jlink'];
+    return ['adapter driver cmsis-dap', ...(config.backend ? [`cmsis-dap backend ${config.backend}`] : [])];
   }
-  if (probe === 'st-link') return ['source [find interface/stlink.cfg]'];
-  if (probe === 'jlink') return ['source [find interface/jlink.cfg]'];
-  return ['adapter driver cmsis-dap', `cmsis_dap_backend ${settings.backend}`];
+  if (config.probe === 'st-link') return [legacyStlinkInterface];
+  if (config.probe === 'jlink') return ['source [find interface/jlink.cfg]'];
+  return ['adapter driver cmsis-dap', ...(config.backend ? [`cmsis_dap_backend ${config.backend}`] : [])];
 }
 function serialCommands(settings: ProjectSettings, dialect: DapDialect): string[] {
   if (!settings.serial) return [];
@@ -58,8 +60,13 @@ function serialCommands(settings: ProjectSettings, dialect: DapDialect): string[
   if (probe === 'jlink' && dialect === 'legacy') throw new Error(t('旧版 OpenOCD 不支持 J-Link 序列号选择，请升级 OpenOCD'));
   return [`adapter serial ${tclWord(settings.serial)}`];
 }
-function transportCommand(settings: ProjectSettings, dialect: DapDialect): string {
-  return probeOf(settings) === 'st-link' && dialect === 'legacy' ? 'transport select hla_swd' : 'transport select swd';
+function transportCommand(config: ProbeConfig, dialect: DapDialect): string {
+  return config.probe === 'st-link' && dialect === 'legacy' ? 'transport select hla_swd' : 'transport select swd';
+}
+/** The adapter-selection commands a debug or flash session issues, shared with the tool self-check. */
+export function adapterCommands(probe: DebugProbe, dialect: DapDialect, backend?: DapBackend): string[] {
+  const config: ProbeConfig = { probe, backend };
+  return [...driverCommands(config, dialect), transportCommand(config, dialect)];
 }
 function adapterGuard(settings: ProjectSettings): string {
   const probe = probeOf(settings);
@@ -82,9 +89,10 @@ export function buildConfigArgs(raw: ProjectSettings, scriptsDirectory: string, 
     return args;
   }
   const args = ['-s', scriptsDirectory];
-  for (const command of driverCommands(settings, dialect)) args.push('-c', command);
+  const config: ProbeConfig = { probe, backend: settings.backend };
+  for (const command of driverCommands(config, dialect)) args.push('-c', command);
   for (const command of serialCommands(settings, dialect)) args.push('-c', command);
-  args.push('-c', transportCommand(settings, dialect), '-c', `source ${tclWord(target)}`, '-c', `adapter speed ${settings.speedKHz}`);
+  args.push('-c', transportCommand(config, dialect), '-c', `source ${tclWord(target)}`, '-c', `adapter speed ${settings.speedKHz}`);
   if (isC5Target(settings)) args.push('-c', c5EventScopeCommand);
   return args;
 }
@@ -117,14 +125,15 @@ export async function resolveDapConfiguration(raw: ProjectSettings, signal: Abor
   if (runtime.approvedScript && (path.resolve(runtime.approvedScript.file).toLowerCase() !== targetScript.toLowerCase()
     || runtime.approvedScript.sha256 !== targetSha256)) throw new Error(t('芯片配置脚本在确认期间发生变化，请重新执行'));
   const probe = runtime.probe ?? runProcess;
+  const adapterConfig: ProbeConfig = { probe: probeOf(settings), backend: settings.backend };
   let dialect: DapDialect | undefined;
   for (const candidate of ['modern', 'legacy'] as const) {
     runtime.guard();
     if (signal.aborted) throw new BuildCancelled();
     const commands = [
-      ...driverCommands(settings, candidate),
+      ...driverCommands(adapterConfig, candidate),
       ...serialCommands(settings, candidate),
-      transportCommand(settings, candidate),
+      transportCommand(adapterConfig, candidate),
       portCommand(candidate, 'gdb', 3333),
       portCommand(candidate, 'tcl', 'disabled'),
       portCommand(candidate, 'telnet', 'disabled'),
